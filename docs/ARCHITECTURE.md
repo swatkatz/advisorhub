@@ -698,6 +698,10 @@ realistic notes like:
 - SSE for subscriptions (`transport.SSE{}` in gqlgen)
 - Single endpoint: `/graphql`
 
+### Sorting
+
+Repositories return data in unspecified stable order. All user-facing sorting (clients by health/name/AUM, alerts by severity/recency, notes by date) is the responsibility of the GraphQL resolver layer, not the underlying repositories. This keeps repository interfaces simple and pushes presentation logic to the transport boundary.
+
 ### Schema
 
 ```graphql
