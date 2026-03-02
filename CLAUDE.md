@@ -134,9 +134,12 @@ Each bounded context lives in its own package under `backend/internal/`. Context
 
 - (none yet)
 
-### Not started
+### Specs written
 
-- client (Client, Household, Advisor, AdvisorNote, Goal)
+- client (Client, Household, Advisor, AdvisorNote, Goal) — `specs/01-client.md`
+
+### Specs not started
+
 - account (Account, AccountType, RESPBeneficiary)
 - event-bus (EventEnvelope, EventSource, pub/sub, audit log)
 - contribution-engine (Contribution, ContributionRule, room calc, CESG)
