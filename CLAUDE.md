@@ -140,9 +140,9 @@ Each bounded context lives in its own package under `backend/internal/`. Context
 - transfer-monitor (Transfer, TransferStatus, stage thresholds, stuck detection) — `specs/05-transfer-monitor.md`
 - temporal-scanner (TemporalRule, check functions, sweep) — `specs/06-temporal-scanner.md`
 - alert (Alert, AlertCategoryRule, dedup, state machine, cascade close, LLM enhancement) — `specs/07-alert.md`
+- action-item-service (ActionItem, ActionItemStatus, CRUD, status transitions) — `specs/08-action-item-service.md`
 
 ### Specs not started
-- action-item-service (ActionItem, ActionItemStatus, CRUD)
 - graphql-api (resolvers, SSE subscriptions)
 - seed-data (seed loader, pre-computed events)
 - frontend (React dashboard)
