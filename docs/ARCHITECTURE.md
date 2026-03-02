@@ -29,7 +29,10 @@ at query time from the client's most severe unresolved alert:
 
 Belongs to a client. Fields: account_type (RRSP/TFSA/FHSA/RESP/NON_REG),
 institution (Wealthsimple, RBC, TD, Desjardins...), balance, is_external
-(WS accounts have real data, external are advisor-entered).
+(WS accounts have real data, external are advisor-entered),
+resp_beneficiary_id (nullable — only for RESP accounts),
+fhsa_lifetime_contributions (stored running total for FHSA $40K lifetime
+cap — only meaningful for FHSA accounts, 0 for others).
 
 ### ContributionRule (reference data — hardcoded)
 
@@ -63,8 +66,9 @@ The scanner is generic: iterate rules, fetch matching entities, dispatch to the 
 
 ### RESPBeneficiary
 
-Per-child entity. Name, date_of_birth, lifetime_contributions. Linked to
-one or more RESP accounts.
+Per-child entity. Fields: client_id (the subscriber/owner — simplified
+for prototype), name, date_of_birth, lifetime_contributions. Linked to
+one or more RESP accounts via resp_beneficiary_id on Account.
 
 ### Contribution
 
