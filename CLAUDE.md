@@ -109,7 +109,7 @@ Each bounded context lives in its own package under `backend/internal/`. Context
 - gqlgen config in `backend/gqlgen.yml`
 - Resolvers in `backend/graph/resolver.go` (or split by type)
 - SSE transport enabled for subscriptions
-- Mutations: `sendAlert`, `trackAlert`, `snoozeAlert`, `createActionItem`, `updateActionItem`, `addNote`, `runMorningSweep`
+- Mutations: `sendAlert`, `trackAlert`, `snoozeAlert`, `acknowledgeAlert`, `createActionItem`, `updateActionItem`, `addNote`, `runMorningSweep`
 
 ### Frontend
 
@@ -139,9 +139,9 @@ Each bounded context lives in its own package under `backend/internal/`. Context
 - contribution-engine (Contribution, ContributionRule, room calc, CESG) — `specs/04-contribution-engine.md`
 - transfer-monitor (Transfer, TransferStatus, stage thresholds, stuck detection) — `specs/05-transfer-monitor.md`
 - temporal-scanner (TemporalRule, check functions, sweep) — `specs/06-temporal-scanner.md`
+- alert (Alert, AlertCategoryRule, dedup, state machine, cascade close, LLM enhancement) — `specs/07-alert.md`
 
 ### Specs not started
-- alert (event→alert mapping, Alert, AlertSeverity, AlertStatus, AlertEventType, HealthStatus, dedup, state machine, LLM enhancement)
 - action-item-service (ActionItem, ActionItemStatus, CRUD)
 - graphql-api (resolvers, SSE subscriptions)
 - seed-data (seed loader, pre-computed events)

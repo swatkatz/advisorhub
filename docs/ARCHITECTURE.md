@@ -228,8 +228,8 @@ Same state transition as Send & Track.
 **Snooze:** Transitions to SNOOZED. For prototype, snoozed_until =
 next sweep. In production, configurable duration.
 
-INFO alerts are auto-sent. No advisor action needed. Displayed
-with "Sent ✓" badge, dimmed in feed.
+INFO alerts are displayed dimmed with "Sent ✓" badge. One action
+available: **Acknowledge** (tick mark) transitions to CLOSED.
 
 ### Auto-Snooze Durations (after advisor action)
 
@@ -725,6 +725,7 @@ type Mutation {
   sendAlert(alertId: ID!, message: String): Alert!
   trackAlert(alertId: ID!, actionItemText: String!): Alert!
   snoozeAlert(alertId: ID!, until: DateTime): Alert!
+  acknowledgeAlert(alertId: ID!): Alert!
   createActionItem(input: CreateActionItemInput!): ActionItem!
   updateActionItem(id: ID!, input: UpdateActionItemInput!): ActionItem!
   addNote(clientId: ID!, text: String!): AdvisorNote!
@@ -938,6 +939,9 @@ ActionItem with provided text. No message sent.
 
 **snoozeAlert:** Transitions alert to SNOOZED. If `until` is
 null, defaults to category-specific auto-snooze duration.
+
+**acknowledgeAlert:** Transitions INFO alert to CLOSED. Returns
+error if alert severity is not INFO or alert is already CLOSED.
 
 **runMorningSweep:** Triggers the Temporal Scanner + Transfer
 Monitor. Events flow through the pipeline. New/updated alerts
