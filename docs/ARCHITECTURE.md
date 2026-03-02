@@ -280,11 +280,13 @@ When alert transitions to CLOSED:
 | Producer                   | Event Types Emitted                                                | Source Tag |
 | -------------------------- | ------------------------------------------------------------------ | ---------- |
 | Contribution Engine        | ContributionRecorded, OverContributionDetected, CESGGap            | REACTIVE   |
-| Transfer Monitor           | TransferStatusChanged, TransferStuck, TransferCompleted            | REACTIVE   |
+| Transfer Monitor           | TransferStatusChanged*, TransferStuck, TransferCompleted*          | REACTIVE   |
 | Temporal Scanner           | DeadlineApproaching, AgeMilestone, EngagementStale, CashUninvested | TEMPORAL   |
 | Analytical Engine (mocked) | PortfolioDrift, TaxLossOpportunity                                 | ANALYTICAL |
 | Alert Lifecycle            | AlertCreated, AlertClosed, AlertUpdated                            | SYSTEM     |
-| Seed Data Loader           | ContributionProcessed, DividendReceived                            | REACTIVE   |
+| Seed Data Loader           | ContributionProcessed, DividendReceived, TransferCompleted         | REACTIVE   |
+
+\* **Prototype note:** Transfer Monitor only emits `TransferStuck` in the prototype. `TransferStatusChanged` and `TransferCompleted` require real status transitions via institution webhooks (`UpdateTransferStatus`), which are stubbed. James's `TransferCompleted` is emitted by the Seed Data Loader as a pre-computed event instead.
 
 #### Consumers
 
