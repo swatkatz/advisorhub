@@ -34,7 +34,7 @@ type Client {
   externalAccounts: [Account!]!
   aum: Float!
   lastMeeting: Date!
-  health: HealthStatus!
+  health: HealthStatus! # Computed: derived from most severe unresolved alert
   alerts: [Alert!]!
   actionItems: [ActionItem!]!
   goals: [Goal!]!
@@ -176,10 +176,11 @@ enum TransferStatus {
   INVESTED
 }
 enum HealthStatus {
-  GREEN
-  YELLOW
-  RED
+  GREEN   # No active alerts, or INFO only
+  YELLOW  # Highest unresolved alert is URGENT or ADVISORY
+  RED     # Has unresolved CRITICAL alert
 }
+# HealthStatus is computed at query time from the client's alerts, not stored.
 enum GoalStatus {
   ON_TRACK
   BEHIND

@@ -17,8 +17,13 @@ household-level (buying a home together).
 
 Individual person. Key fields: name, email, date_of_birth (matters for
 age milestones — RRIF at 71, CPP at 65, RESP strategy when child turns
-17), household_id (nullable), last_meeting_date, health status
-(GREEN/YELLOW/RED).
+17), household_id (nullable), last_meeting_date.
+
+Health status (GREEN/YELLOW/RED) is **computed, not stored**. Derived
+at query time from the client's most severe unresolved alert:
+- RED: has unresolved CRITICAL alert
+- YELLOW: highest unresolved alert is URGENT or ADVISORY
+- GREEN: no active alerts, or INFO only
 
 ### Account
 
@@ -115,6 +120,28 @@ Alert   ──(1:N)──▶ ActionItem (via linked_action_item_ids)
 Account ──(N:1)──▶ ContributionRule (by account_type)
 RESP Account ──(N:1)──▶ RESPBeneficiary
 ```
+
+### Bounded Contexts
+
+Each bounded context owns its entities, enums, and migrations. Cross-context references are by ID only. Contexts communicate through the event bus or through interfaces — never by importing each other's types directly.
+
+| # | Context | Owns | Risk |
+|---|---|---|---|
+| 01 | client | Client, Household, Advisor, AdvisorNote, Goal. Migrations for these tables. | LOW |
+| 02 | account | Account, AccountType, RESPBeneficiary. Migrations for these tables. | LOW |
+| 03 | event-bus | EventEnvelope, EventSource, pub/sub, audit log. | MEDIUM |
+| 04 | contribution-engine | Contribution, ContributionRule, room calc, over-contribution detection, CESG gap detection. | HIGH |
+| 05 | transfer-monitor | Transfer, TransferStatus, stage thresholds, stuck detection. | HIGH |
+| 06 | temporal-scanner | TemporalRule, check functions (AGE_APPROACHING, DEADLINE_WITH_ROOM, DAYS_SINCE, BALANCE_IDLE), sweep orchestration. | HIGH |
+| 07 | alert-generator | Event→alert mapping logic, AlertCategoryRule. Constructs `CreateAlertRequest` (type owned by alert-lifecycle). | MEDIUM |
+| 08 | alert-lifecycle | Alert, AlertSeverity, AlertStatus, AlertEventType, HealthStatus (computed), `CreateAlertRequest`, `UpdateAlertWithSummaryAndDraft`, dedup, state machine, cascade close. | HIGH |
+| 09 | alert-enhancer | LLM prompt/response logic. Constructs `UpdateAlertWithSummaryAndDraft` (type owned by alert-lifecycle). | MEDIUM |
+| 10 | action-item-service | ActionItem, ActionItemStatus, CRUD, status transitions. | LOW |
+| 11 | graphql-api | Resolvers, SSE subscriptions. Transport layer — no business logic. | MEDIUM |
+| 12 | seed-data | Seed loader, pre-computed events. | LOW |
+| 13 | frontend | React dashboard. | LOW |
+
+Dependencies flow top to bottom. Each context only depends on contexts above it.
 
 ## 2. Alert System
 
@@ -551,18 +578,18 @@ Alert Lifecycle → Alert Enhancer like anything else.
 
 ### Client Profiles (seeded)
 
-| ID  | Name            | Household       | DOB        | AUM    | Last Meeting | Health |
-| --- | --------------- | --------------- | ---------- | ------ | ------------ | ------ |
-| c1  | Priya Sharma    | —               | 1988-03-15 | $485K  | 2025-12-14   | RED    |
-| c2  | Marcus Chen     | —               | 1955-11-08 | $1.25M | 2026-01-22   | GREEN  |
-| c3  | Swati Gupta     | Gupta Family    | 1990-07-22 | $480K  | 2026-02-10   | YELLOW |
-| c4  | Rohan Gupta     | Gupta Family    | 1989-01-30 | $240K  | 2026-02-10   | YELLOW |
-| c5  | Elena Vasquez   | —               | 1982-09-11 | $310K  | 2025-09-05   | YELLOW |
-| c6  | James Williams  | Williams Family | 1975-04-18 | $1.4M  | 2026-02-25   | GREEN  |
-| c7  | Tanya Williams  | Williams Family | 1977-08-03 | $700K  | 2026-02-25   | GREEN  |
-| c8  | Amir Patel      | —               | 1993-06-27 | $195K  | 2025-11-18   | RED    |
-| c9  | Sophie Tremblay | —               | 1970-12-01 | $890K  | 2026-01-30   | GREEN  |
-| c10 | David Kim       | —               | 1980-05-14 | $540K  | 2025-08-12   | YELLOW |
+| ID  | Name            | Household       | DOB        | AUM    | Last Meeting |
+| --- | --------------- | --------------- | ---------- | ------ | ------------ |
+| c1  | Priya Sharma    | —               | 1988-03-15 | $485K  | 2025-12-14   |
+| c2  | Marcus Chen     | —               | 1955-11-08 | $1.25M | 2026-01-22   |
+| c3  | Swati Gupta     | Gupta Family    | 1990-07-22 | $480K  | 2026-02-10   |
+| c4  | Rohan Gupta     | Gupta Family    | 1989-01-30 | $240K  | 2026-02-10   |
+| c5  | Elena Vasquez   | —               | 1982-09-11 | $310K  | 2025-09-05   |
+| c6  | James Williams  | Williams Family | 1975-04-18 | $1.4M  | 2026-02-25   |
+| c7  | Tanya Williams  | Williams Family | 1977-08-03 | $700K  | 2026-02-25   |
+| c8  | Amir Patel      | —               | 1993-06-27 | $195K  | 2025-11-18   |
+| c9  | Sophie Tremblay | —               | 1970-12-01 | $890K  | 2026-01-30   |
+| c10 | David Kim       | —               | 1980-05-14 | $540K  | 2025-08-12   |
 
 ### Alert-Triggering Scenarios
 

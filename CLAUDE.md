@@ -136,17 +136,19 @@ Each bounded context lives in its own package under `backend/internal/`. Context
 
 ### Not started
 
-- domain-entities
-- event-bus
-- contribution-engine
-- transfer-monitor
-- temporal-scanner
-- alert-generator
-- alert-lifecycle
-- alert-enhancer
-- action-item-service
-- graphql-api
-- frontend
+- client (Client, Household, Advisor, AdvisorNote, Goal)
+- account (Account, AccountType, RESPBeneficiary)
+- event-bus (EventEnvelope, EventSource, pub/sub, audit log)
+- contribution-engine (Contribution, ContributionRule, room calc, CESG)
+- transfer-monitor (Transfer, TransferStatus, stuck detection)
+- temporal-scanner (TemporalRule, check functions, sweep)
+- alert-generator (event→alert mapping, AlertCategoryRule)
+- alert-lifecycle (Alert, AlertSeverity, AlertStatus, AlertEventType, HealthStatus, dedup, state machine)
+- alert-enhancer (LLM summary + draft message)
+- action-item-service (ActionItem, ActionItemStatus, CRUD)
+- graphql-api (resolvers, SSE subscriptions)
+- seed-data (seed loader, pre-computed events)
+- frontend (React dashboard)
 
 ## Key Domain Rules (quick reference)
 
