@@ -700,7 +700,7 @@ realistic notes like:
 
 ### Sorting
 
-Repositories return data in unspecified stable order. All user-facing sorting (clients by health/name/AUM, alerts by severity/recency, notes by date) is the responsibility of the GraphQL resolver layer, not the underlying repositories. This keeps repository interfaces simple and pushes presentation logic to the transport boundary.
+Repositories return data ordered by `id` by default. All user-facing sorting (clients by health/name/AUM, alerts by severity/recency, notes by date) is the responsibility of the GraphQL resolver layer, not the underlying repositories. This keeps repository interfaces simple and pushes presentation logic to the transport boundary.
 
 ### Schema
 
