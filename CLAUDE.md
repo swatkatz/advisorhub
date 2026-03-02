@@ -19,6 +19,21 @@ AdvisorHub — AI-powered dashboard for financial advisors. Surfaces prioritized
 - **Frontend:** React + TypeScript
 - **Deployment:** Railway (Postgres managed instance, Go service, React static)
 
+### Deployment (Railway)
+
+- **Project:** robust-happiness (Railway auto-name)
+- **Backend service:** `https://backend-production-d58b.up.railway.app`
+  - Root directory: `backend/`
+  - Port: 8080
+  - Env vars: `DATABASE_URL` (references Postgres service), `ANTHROPIC_API_KEY`, `CORS_ALLOWED_ORIGIN=https://advisorhub-production.up.railway.app`
+- **Frontend service:** `https://advisorhub-production.up.railway.app`
+  - Root directory: `frontend/`
+  - Port: 8080 (serve)
+  - Build arg: `VITE_API_URL=https://backend-production-d58b.up.railway.app`
+- **Postgres:** managed instance, connected via `DATABASE_URL`
+- **Auto-deploy:** both services deploy on push to main via GitHub integration
+- **Migrations:** run from autodev.sh via `cat backend/migrations/*.sql | railway connect Postgres` (not from inside the container)
+
 ### Pipeline
 
 ```
