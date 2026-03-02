@@ -9,9 +9,9 @@ Does not own: Client data (client context), contribution records or room calcula
 Depends on: Nothing — this is a foundational data context. References `client_id` via foreign key but does not import or depend on the client package.
 
 Produces:
-- `AccountType` enum: RRSP, TFSA, FHSA, RESP, NON_REG
-- `AccountRepository` interface: GetAccount, GetAccountsByClientID
-- `RESPBeneficiaryRepository` interface: GetRESPBeneficiary, GetRESPBeneficiariesByClientID
+- `AccountType` enum: RRSP, TFSA, FHSA, RESP, NON_REG — includes `LifetimeCap()` method returning the lifetime contribution cap (FHSA: $40,000, RESP: $50,000, others: nil)
+- `AccountRepository` interface: GetAccount, GetAccountsByClientID, UpdateFHSALifetimeContributions
+- `RESPBeneficiaryRepository` interface: GetRESPBeneficiary, GetRESPBeneficiariesByClientID, UpdateLifetimeContributions
 
 ## Contracts
 
@@ -30,11 +30,13 @@ Interfaces exposed to other contexts (by ID lookup only):
 type AccountRepository interface {
     GetAccount(ctx context.Context, id string) (*Account, error)
     GetAccountsByClientID(ctx context.Context, clientID string) ([]Account, error)
+    UpdateFHSALifetimeContributions(ctx context.Context, accountID string, total float64) error
 }
 
 type RESPBeneficiaryRepository interface {
     GetRESPBeneficiary(ctx context.Context, id string) (*RESPBeneficiary, error)
     GetRESPBeneficiariesByClientID(ctx context.Context, clientID string) ([]RESPBeneficiary, error)
+    UpdateLifetimeContributions(ctx context.Context, beneficiaryID string, total float64) error
 }
 ```
 
@@ -47,6 +49,11 @@ type RESPBeneficiaryRepository interface {
 Values: `RRSP`, `TFSA`, `FHSA`, `RESP`, `NON_REG`
 
 Owned by this context. Other contexts (contribution-engine, transfer-monitor, temporal-scanner) import this enum.
+
+Exposes a `LifetimeCap() *float64` method:
+- FHSA → $40,000
+- RESP → $50,000 (per beneficiary)
+- RRSP, TFSA, NON_REG → nil (no lifetime cap)
 
 **Account**
 
@@ -89,6 +96,9 @@ N/A — no state transitions in this context.
 - Where an account has `account_type != RESP`, `resp_beneficiary_id` shall be null.
 - Where an account has `account_type = FHSA`, `fhsa_lifetime_contributions` shall reflect the cumulative total contributed to that account.
 - Where an account has `account_type != FHSA`, `fhsa_lifetime_contributions` shall be 0.
+- When `UpdateFHSALifetimeContributions(accountID, total)` is called, the system shall update `fhsa_lifetime_contributions` on the specified account.
+- When `UpdateLifetimeContributions(beneficiaryID, total)` is called, the system shall update `lifetime_contributions` on the specified RESP beneficiary.
+- When `LifetimeCap()` is called on an AccountType, the system shall return $40,000 for FHSA, $50,000 for RESP, and nil for all other types.
 
 ## Decision Table
 
@@ -108,3 +118,8 @@ N/A
 10. Given a client with no RESP beneficiaries, when `GetRESPBeneficiariesByClientID(clientID)` is called, then an empty slice is returned without error.
 11. Given an FHSA account with $15,000 lifetime contributions, when queried, then `fhsa_lifetime_contributions` reflects $15,000.
 12. Given a non-FHSA account, when queried, then `fhsa_lifetime_contributions` is 0.
+13. Given an FHSA account with $10,000 lifetime contributions, when `UpdateFHSALifetimeContributions(accountID, 18000)` is called, then `fhsa_lifetime_contributions` reflects $18,000.
+14. Given a RESP beneficiary with $30,000 lifetime contributions, when `UpdateLifetimeContributions(beneficiaryID, 32500)` is called, then `lifetime_contributions` reflects $32,500.
+15. Given `AccountType = FHSA`, when `LifetimeCap()` is called, then $40,000 is returned.
+16. Given `AccountType = RESP`, when `LifetimeCap()` is called, then $50,000 is returned.
+17. Given `AccountType = RRSP`, when `LifetimeCap()` is called, then nil is returned.

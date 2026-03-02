@@ -140,9 +140,9 @@ Each bounded context lives in its own package under `backend/internal/`. Context
 - client (Client, Household, Advisor, AdvisorNote, Goal) — `specs/01-client.md`
 - account (Account, AccountType, RESPBeneficiary) — `specs/02-account.md`
 - event-bus (EventEnvelope, EventSource, EntityType, pub/sub) — `specs/03-event-bus.md`
+- contribution-engine (Contribution, ContributionRule, room calc, CESG) — `specs/04-contribution-engine.md`
 
 ### Specs not started
-- contribution-engine (Contribution, ContributionRule, room calc, CESG)
 - transfer-monitor (Transfer, TransferStatus, stuck detection)
 - temporal-scanner (TemporalRule, check functions, sweep)
 - alert-generator (event→alert mapping, AlertCategoryRule)
