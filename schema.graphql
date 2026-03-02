@@ -1,0 +1,213 @@
+type Query {
+  clients(advisorId: ID!): [Client!]!
+  client(id: ID!): Client!
+  alerts(advisorId: ID!, filter: AlertFilter): [Alert!]!
+  alert(id: ID!): Alert!
+  contributionSummary(clientId: ID!, taxYear: Int!): ContributionSummary!
+  transfers(advisorId: ID!): [Transfer!]!
+  actionItems(clientId: ID): [ActionItem!]!
+}
+
+type Mutation {
+  sendAlert(alertId: ID!, message: String): Alert!
+  trackAlert(alertId: ID!, actionItemText: String!): Alert!
+  snoozeAlert(alertId: ID!, until: DateTime): Alert!
+  createActionItem(input: CreateActionItemInput!): ActionItem!
+  updateActionItem(id: ID!, input: UpdateActionItemInput!): ActionItem!
+  addNote(clientId: ID!, text: String!): AdvisorNote!
+  runMorningSweep(advisorId: ID!): SweepResult!
+}
+
+type Subscription {
+  alertFeed(advisorId: ID!): AlertEvent!
+}
+
+# --- Core Types ---
+
+type Client {
+  id: ID!
+  name: String!
+  email: String!
+  dateOfBirth: Date!
+  household: Household
+  accounts: [Account!]!
+  externalAccounts: [Account!]!
+  aum: Float!
+  lastMeeting: Date!
+  health: HealthStatus!
+  alerts: [Alert!]!
+  actionItems: [ActionItem!]!
+  goals: [Goal!]!
+  notes: [AdvisorNote!]!
+}
+
+type Household {
+  id: ID!
+  name: String!
+  members: [Client!]!
+}
+
+type Account {
+  id: ID!
+  accountType: AccountType!
+  institution: String!
+  balance: Float!
+  isExternal: Boolean!
+}
+
+type Alert {
+  id: ID!
+  conditionKey: String!
+  client: Client!
+  severity: AlertSeverity!
+  category: String!
+  status: AlertStatus!
+  snoozedUntil: DateTime
+  summary: String!
+  draftMessage: String
+  linkedActionItems: [ActionItem!]!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type ActionItem {
+  id: ID!
+  client: Client!
+  alert: Alert
+  text: String!
+  status: ActionItemStatus!
+  dueDate: Date
+  createdAt: DateTime!
+  resolvedAt: DateTime
+  resolutionNote: String
+}
+
+type ContributionSummary {
+  clientId: ID!
+  taxYear: Int!
+  accounts: [AccountContribution!]!
+}
+
+type AccountContribution {
+  accountType: AccountType!
+  annualLimit: Float!
+  lifetimeCap: Float
+  contributed: Float!
+  remaining: Float!
+  isOverContributed: Boolean!
+  overAmount: Float
+  penaltyPerMonth: Float
+  deadline: Date
+  daysUntilDeadline: Int
+}
+
+type Transfer {
+  id: ID!
+  client: Client!
+  sourceInstitution: String!
+  accountType: AccountType!
+  amount: Float!
+  status: TransferStatus!
+  initiatedAt: Date!
+  daysInCurrentStage: Int!
+  isStuck: Boolean!
+}
+
+type Goal {
+  id: ID!
+  name: String!
+  targetAmount: Float
+  targetDate: Date
+  progressPct: Int!
+  status: GoalStatus!
+}
+
+type AdvisorNote {
+  id: ID!
+  date: Date!
+  text: String!
+}
+
+type SweepResult {
+  alertsGenerated: Int!
+  alertsUpdated: Int!
+  alertsSkipped: Int!
+  duration: String!
+}
+
+type AlertEvent {
+  type: AlertEventType!
+  alert: Alert!
+}
+
+# --- Enums ---
+
+enum AccountType {
+  RRSP
+  TFSA
+  FHSA
+  RESP
+  NON_REG
+}
+enum AlertSeverity {
+  CRITICAL
+  URGENT
+  ADVISORY
+  INFO
+}
+enum AlertStatus {
+  OPEN
+  SNOOZED
+  ACTED
+  CLOSED
+}
+enum ActionItemStatus {
+  PENDING
+  IN_PROGRESS
+  DONE
+  CLOSED
+}
+enum TransferStatus {
+  INITIATED
+  DOCUMENTS_SUBMITTED
+  IN_REVIEW
+  IN_TRANSIT
+  RECEIVED
+  INVESTED
+}
+enum HealthStatus {
+  GREEN
+  YELLOW
+  RED
+}
+enum GoalStatus {
+  ON_TRACK
+  BEHIND
+  AHEAD
+}
+enum AlertEventType {
+  CREATED
+  UPDATED
+  CLOSED
+}
+
+# --- Inputs ---
+
+input AlertFilter {
+  severity: AlertSeverity
+  status: AlertStatus
+  clientId: ID
+}
+
+input CreateActionItemInput {
+  clientId: ID!
+  alertId: ID
+  text: String!
+  dueDate: Date
+}
+
+input UpdateActionItemInput {
+  text: String
+  status: ActionItemStatus
+  dueDate: Date
+}
