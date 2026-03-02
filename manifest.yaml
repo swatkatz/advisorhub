@@ -1,0 +1,94 @@
+# Contexts ordered by topological sort of dependency graph.
+# autodev.sh processes top-to-bottom — each context's dependencies
+# are guaranteed to be built before it runs.
+#
+# Dependency graph:
+#
+#   Level 0 (no deps):    client, account, event-bus, action-item-service
+#   Level 1:              contribution-engine → [event-bus, account]
+#                         transfer-monitor → [event-bus]
+#   Level 2:              temporal-scanner → [event-bus, client, account, contribution-engine]
+#                         alert → [event-bus, client, action-item-service]
+#   Level 3:              seed-data → [client, account, contribution-engine, transfer-monitor, event-bus]
+#   Level 4:              graphql-api → [all above]
+
+contexts:
+  # --- Level 0: no dependencies ---
+
+  - name: client
+    spec: specs/01-client.md
+    package: client
+    risk: LOW
+    depends_on: []
+    description: "Client, Household, Advisor, AdvisorNote, Goal entities and repositories"
+
+  - name: account
+    spec: specs/02-account.md
+    package: account
+    risk: LOW
+    depends_on: []
+    description: "Account, AccountType, RESPBeneficiary entities and repositories"
+
+  - name: event-bus
+    spec: specs/03-event-bus.md
+    package: eventbus
+    risk: MEDIUM
+    depends_on: []
+    description: "EventEnvelope, EventSource, EntityType, pub/sub infrastructure"
+
+  - name: action-item-service
+    spec: specs/08-action-item-service.md
+    package: actionitem
+    risk: LOW
+    depends_on: []
+    description: "ActionItem CRUD and status transitions"
+
+  # --- Level 1: depends on Level 0 ---
+
+  - name: contribution-engine
+    spec: specs/04-contribution-engine.md
+    package: contribution
+    risk: HIGH
+    depends_on: [event-bus, account]
+    description: "Contribution rules, room calc, over-contribution detection, CESG gap detection"
+
+  - name: transfer-monitor
+    spec: specs/05-transfer-monitor.md
+    package: transfer
+    risk: HIGH
+    depends_on: [event-bus]
+    description: "Transfer status tracking, stage thresholds, stuck detection"
+
+  # --- Level 2: depends on Levels 0-1 ---
+
+  - name: temporal-scanner
+    spec: specs/06-temporal-scanner.md
+    package: temporal
+    risk: HIGH
+    depends_on: [event-bus, client, account, contribution-engine]
+    description: "Rule-driven temporal checks (AGE_APPROACHING, DEADLINE_WITH_ROOM, DAYS_SINCE, BALANCE_IDLE)"
+
+  - name: alert
+    spec: specs/07-alert.md
+    package: alert
+    risk: HIGH
+    depends_on: [event-bus, client, action-item-service]
+    description: "Alert mapping, lifecycle state machine, dedup, cascade close, LLM enhancement"
+
+  # --- Level 3: depends on Levels 0-2 ---
+
+  - name: seed-data
+    spec: specs/10-seed-data.md
+    package: seed
+    risk: LOW
+    depends_on: [client, account, contribution-engine, transfer-monitor, event-bus]
+    description: "Seed data loader, pre-computed events for demo scenarios"
+
+  # --- Level 4: depends on all above ---
+
+  - name: graphql-api
+    spec: specs/09-graphql-api.md
+    package: graph
+    risk: MEDIUM
+    depends_on: [client, account, event-bus, contribution-engine, transfer-monitor, temporal-scanner, alert, action-item-service]
+    description: "GraphQL resolvers, SSE subscriptions, transport layer"

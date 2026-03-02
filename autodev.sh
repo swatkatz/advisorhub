@@ -77,6 +77,7 @@ for i in $(seq 0 $((context_count - 1))); do
   name=$(yq ".contexts[$i].name" "$MANIFEST")
   spec=$(yq ".contexts[$i].spec" "$MANIFEST")
   risk=$(yq ".contexts[$i].risk" "$MANIFEST")
+  pkg=$(yq ".contexts[$i].package" "$MANIFEST")
   description=$(yq ".contexts[$i].description" "$MANIFEST")
 
   echo "═══════════════════════════════════════"
@@ -110,9 +111,8 @@ for i in $(seq 0 $((context_count - 1))); do
   echo "Running tests for $name..."
   echo ""
 
-  # Determine the Go package path from context name
-  # Convention: context name maps to directory name (hyphens removed)
-  pkg_dir=$(echo "$name" | tr -d '-')
+  # Package directory from manifest (e.g., "graph" for graphql-api)
+  pkg_dir="$pkg"
   test_output=$(go test ./backend/internal/"$pkg_dir"/... -v -count=1 2>&1) || {
     echo "TESTS FAILED for $name"
     echo "$test_output"
@@ -202,6 +202,17 @@ EOF
     gh pr merge "$pr_url" --merge --delete-branch
     review_status="Auto"
     auto_approved=$((auto_approved + 1))
+  fi
+
+  # --- Run migrations if any were added ---
+
+  migration_files=$(git diff "$BASE_BRANCH"..."$branch_name" --name-only -- backend/migrations/*.sql 2>/dev/null)
+  if [ -n "$migration_files" ]; then
+    echo "Running migrations against Railway Postgres..."
+    cat backend/migrations/*.sql | railway connect Postgres
+    echo "Migrations applied."
+  else
+    echo "No new migrations for $name, skipping."
   fi
 
   # --- Return to base branch ---

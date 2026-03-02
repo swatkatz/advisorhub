@@ -2,6 +2,7 @@ scalar Date
 scalar DateTime
 
 type Query {
+  advisor(id: ID!): Advisor!
   clients(advisorId: ID!): [Client!]!
   client(id: ID!): Client!
   alerts(advisorId: ID!, filter: AlertFilter): [Alert!]!
@@ -27,6 +28,13 @@ type Subscription {
 }
 
 # --- Core Types ---
+
+type Advisor {
+  id: ID!
+  name: String!
+  email: String!
+  role: String!
+}
 
 type Client {
   id: ID!

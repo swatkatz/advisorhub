@@ -163,9 +163,11 @@ Run both after any schema change. The graphql-api context owns the schema; other
 - action-item-service (ActionItem, ActionItemStatus, CRUD, status transitions) — `specs/08-action-item-service.md`
 - graphql-api (resolvers, SSE subscriptions, Railway deployment) — `specs/09-graphql-api.md`
 - seed-data (seed loader, pre-computed events) — `specs/10-seed-data.md`
+- frontend (React dashboard, Apollo Client, graphql-codegen) — `specs/11-frontend.md`
 
 ### Specs not started
-- frontend (React dashboard)
+
+- (none)
 
 ## Key Domain Rules (quick reference)
 
