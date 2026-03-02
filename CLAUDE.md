@@ -47,7 +47,6 @@ advisorhub/
 ├── backend/
 │   ├── server.go
 │   ├── internal/
-│   │   ├── domain/           ← shared types, enums, interfaces
 │   │   ├── eventbus/         ← event envelope, pub/sub
 │   │   ├── contribution/     ← contribution engine (CRA rules, room calc)
 │   │   ├── transfer/         ← transfer monitor (stuck detection)
@@ -67,14 +66,14 @@ advisorhub/
     └── tsconfig.json
 ```
 
-Each bounded context lives in its own package under `backend/internal/`. Contexts communicate through the event bus or through interfaces defined in `domain/` — never by importing each other directly.
+Each bounded context lives in its own package under `backend/internal/`. Each context owns its own types. Cross-context references use primitive types (strings for IDs). Contexts communicate through the event bus or through interfaces — never by importing each other's packages directly.
 
 ## How to Work
 
 1. **Read your spec first.** Your assigned spec is in `specs/`. It defines what you own, what you don't own, your contracts, and test anchors.
 2. **Read `docs/ARCHITECTURE.md`** for domain model and architectural context if your spec references entities or patterns defined there.
 3. **Write tests first.** Use the test anchors from your spec as starting points. Write a failing test, then implement. No exceptions.
-4. **Stay in your bounded context.** Only modify files in your assigned package. If you need a shared type, it should already exist in `domain/`. If it doesn't, add it to `domain/` and nothing else.
+4. **Stay in your bounded context.** Only modify files in your assigned package. Each context owns its own types. Use primitive types (strings) for cross-context references like IDs.
 5. **Log non-obvious decisions.** If you make a choice not dictated by the spec (data structure selection, error handling approach, etc.), add a comment or note in your commit message explaining why.
 6. **Don't touch other bounded contexts.** If your spec says "Depends on: event-bus", you import and use its public interface. You do not modify it.
 
@@ -92,7 +91,16 @@ Each bounded context lives in its own package under `backend/internal/`. Context
 
 - PostgreSQL. Migrations in `backend/migrations/` numbered sequentially: `001_create_clients.sql`, `002_create_accounts.sql`, etc.
 - Use `sqlx` for queries (not raw `database/sql`)
-- All timestamps are UTC
+- Use `timestamptz` for all timestamp columns
+
+### Timestamps & Timezone
+
+- **Prototype uses EST (`America/New_York`) everywhere.** This is a demo-only simplification so timestamps display correctly without frontend timezone conversion.
+- All `time.Now()` calls must use `time.Now().In(est)` where `est, _ = time.LoadLocation("America/New_York")`. This location is initialized once in `server.go` and passed to contexts that generate timestamps.
+- Seed data timestamps are constructed in EST: `time.Date(2026, 2, 25, 14, 30, 0, 0, est)`
+- The `DateTime` GraphQL scalar marshals as RFC3339 with offset: `"2026-03-02T09:15:00-05:00"`
+- The `Date` GraphQL scalar is timezone-agnostic: `"2026-03-02"`
+- **In production**, the server would use UTC and the frontend would handle locale conversion. For the prototype, skip that complexity.
 
 ### Event Bus
 
@@ -114,10 +122,13 @@ Each bounded context lives in its own package under `backend/internal/`. Context
 ### Frontend
 
 - React 18+ with TypeScript
+- Vite for build tooling
 - Visual reference: `docs/mocks/advisor-dashboard.jsx`
 - Tailwind for styling is fine, or inline styles
 - GraphQL client: urql or Apollo — pick one and stick with it
 - SSE subscription via `graphql-sse` client library
+- CORS for cross-origin requests to backend (`rs/cors` on backend side)
+- Static serving via `serve` in production (no nginx)
 
 ## Current State
 
@@ -141,10 +152,10 @@ Each bounded context lives in its own package under `backend/internal/`. Context
 - temporal-scanner (TemporalRule, check functions, sweep) — `specs/06-temporal-scanner.md`
 - alert (Alert, AlertCategoryRule, dedup, state machine, cascade close, LLM enhancement) — `specs/07-alert.md`
 - action-item-service (ActionItem, ActionItemStatus, CRUD, status transitions) — `specs/08-action-item-service.md`
+- graphql-api (resolvers, SSE subscriptions, Railway deployment) — `specs/09-graphql-api.md`
+- seed-data (seed loader, pre-computed events) — `specs/10-seed-data.md`
 
 ### Specs not started
-- graphql-api (resolvers, SSE subscriptions)
-- seed-data (seed loader, pre-computed events)
 - frontend (React dashboard)
 
 ## Key Domain Rules (quick reference)

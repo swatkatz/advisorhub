@@ -703,6 +703,18 @@ realistic notes like:
 - HTTP for queries and mutations
 - SSE for subscriptions (`transport.SSE{}` in gqlgen)
 - Single endpoint: `/graphql`
+- Deployed on Railway (Go service). SSE requires: `X-Accel-Buffering: no`, `Cache-Control: no-cache, no-transform`, `Connection: keep-alive` response headers. gqlgen handles framing; configure `transport.SSE{KeepAlivePingInterval: 15 * time.Second}` for Railway proxy keepalive.
+
+### Timestamps & Timezone
+
+**Prototype uses EST (`America/New_York`) for all timestamps.** This is a demo-only decision so the advisor sees correct local times without frontend timezone conversion.
+
+- `time.Now()` calls use `time.Now().In(est)` where `est` is `America/New_York`
+- `DateTime` scalar marshals as RFC3339 with offset: `"2026-03-02T09:15:00-05:00"` — frontend displays as-is
+- `Date` scalar is timezone-agnostic: `"2026-03-02"`
+- Seed data timestamps constructed in EST: `time.Date(2026, 2, 25, 14, 30, 0, 0, est)`
+- Postgres uses `timestamptz` columns. The EST offset is part of the Go `time.Time` value written via sqlx.
+- **In production**, server would use UTC and frontend would convert. For prototype, skip that complexity.
 
 ### Sorting
 

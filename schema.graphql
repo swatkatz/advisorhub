@@ -1,3 +1,6 @@
+scalar Date
+scalar DateTime
+
 type Query {
   clients(advisorId: ID!): [Client!]!
   client(id: ID!): Client!
@@ -12,6 +15,7 @@ type Mutation {
   sendAlert(alertId: ID!, message: String): Alert!
   trackAlert(alertId: ID!, actionItemText: String!): Alert!
   snoozeAlert(alertId: ID!, until: DateTime): Alert!
+  acknowledgeAlert(alertId: ID!): Alert!
   createActionItem(input: CreateActionItemInput!): ActionItem!
   updateActionItem(id: ID!, input: UpdateActionItemInput!): ActionItem!
   addNote(clientId: ID!, text: String!): AdvisorNote!
