@@ -50,7 +50,7 @@ advisorhub/
 │   ├── server.go
 │   ├── internal/
 │   │   ├── domain/           ← shared types, enums, interfaces
-│   │   ├── eventbus/         ← event envelope, pub/sub, audit log
+│   │   ├── eventbus/         ← event envelope, pub/sub
 │   │   ├── contribution/     ← contribution engine (CRA rules, room calc)
 │   │   ├── transfer/         ← transfer monitor (stuck detection)
 │   │   ├── temporal/         ← temporal scanner (rule-driven sweep)
@@ -101,7 +101,8 @@ Each bounded context lives in its own package under `backend/internal/`. Context
 ### Event Bus
 
 - Import from `internal/eventbus`
-- Events use the `EventEnvelope` type: `{ID, Type, ConditionKey, ClientID, Payload, Source, Timestamp}`
+- Events use the `EventEnvelope` type: `{ID, Type, EntityID, EntityType, Payload, Source, Timestamp}`
+- EntityID/EntityType are generic entity references (not domain-specific) — kept on the envelope for query convenience, should eventually move to Payload
 - Publish with `bus.Publish(ctx, envelope)`
 - Subscribe with `bus.Subscribe(eventType)` which returns a channel
 - Source is one of: `REACTIVE`, `TEMPORAL`, `ANALYTICAL`, `SYSTEM`
@@ -138,9 +139,9 @@ Each bounded context lives in its own package under `backend/internal/`. Context
 
 - client (Client, Household, Advisor, AdvisorNote, Goal) — `specs/01-client.md`
 - account (Account, AccountType, RESPBeneficiary) — `specs/02-account.md`
+- event-bus (EventEnvelope, EventSource, EntityType, pub/sub) — `specs/03-event-bus.md`
 
 ### Specs not started
-- event-bus (EventEnvelope, EventSource, pub/sub, audit log)
 - contribution-engine (Contribution, ContributionRule, room calc, CESG)
 - transfer-monitor (Transfer, TransferStatus, stuck detection)
 - temporal-scanner (TemporalRule, check functions, sweep)

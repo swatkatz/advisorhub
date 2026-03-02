@@ -104,9 +104,10 @@ alert_id (nullable — some are manually created), text, status
 
 ### Event
 
-Event bus record + audit log. Fields: id, event_type, condition_key,
-client_id, payload (JSON), source (REACTIVE/TEMPORAL/ANALYTICAL),
-timestamp.
+Event bus envelope. Fields: id, event_type, entity_id, entity_type,
+payload (JSON), source (REACTIVE/TEMPORAL/ANALYTICAL/SYSTEM),
+timestamp. EntityID and EntityType are generic entity references
+kept on the envelope for routing convenience — not domain-specific.
 
 ### Entity Relationships
 
@@ -133,7 +134,7 @@ Each bounded context owns its entities, enums, and migrations. Cross-context ref
 |---|---|---|---|
 | 01 | client | Client, Household, Advisor, AdvisorNote, Goal. Migrations for these tables. | LOW |
 | 02 | account | Account, AccountType, RESPBeneficiary. Migrations for these tables. | LOW |
-| 03 | event-bus | EventEnvelope, EventSource, pub/sub, audit log. | MEDIUM |
+| 03 | event-bus | EventEnvelope, EventSource, EntityType, pub/sub. | MEDIUM |
 | 04 | contribution-engine | Contribution, ContributionRule, room calc, over-contribution detection, CESG gap detection. | HIGH |
 | 05 | transfer-monitor | Transfer, TransferStatus, stage thresholds, stuck detection. | HIGH |
 | 06 | temporal-scanner | TemporalRule, check functions (AGE_APPROACHING, DEADLINE_WITH_ROOM, DAYS_SINCE, BALANCE_IDLE), sweep orchestration. | HIGH |
@@ -481,9 +482,12 @@ For each event:
 
 1. Look up AlertCategoryRule by event_type → get category, severity,
    draft_message flag
-2. Construct condition_key from event payload
-3. Build alert payload from event payload
-4. Create proto-alert: { condition_key, client_id, severity,
+2. Construct condition_key from event payload (condition_key is
+   NOT on the EventEnvelope — the Alert Generator builds it)
+3. Extract client_id from event payload (or derive from EntityID
+   when EntityType = Client)
+4. Build alert payload from event payload
+5. Create proto-alert: { condition_key, client_id, severity,
    category, status: OPEN, payload }
 5. Pass to Alert Lifecycle
 
@@ -522,25 +526,40 @@ Owns: Natural language generation via LLM.
 
 ### Event Bus
 
-Owns: Pub/sub, event envelope, audit log.
+Owns: Pub/sub, event envelope, EntityType constants.
 
 **Implementation:** Go channels. Map of event_type → subscriber
-channels, plus wildcard subscribers.
+channels. Non-blocking publish via buffered channels.
 
 ```go
+type EntityType string
+
+const (
+    EntityTypeClient          EntityType = "Client"
+    EntityTypeAccount         EntityType = "Account"
+    EntityTypeTransfer        EntityType = "Transfer"
+    EntityTypeRESPBeneficiary EntityType = "RESPBeneficiary"
+)
+
 type EventEnvelope struct {
-    ID           string
-    Type         string
-    ConditionKey string
-    ClientID     string
-    Payload      json.RawMessage
-    Source       EventSource  // REACTIVE | TEMPORAL | ANALYTICAL | SYSTEM
-    Timestamp    time.Time
+    ID         string
+    Type       string
+    EntityID   string          // ID of the domain entity this event concerns
+    EntityType EntityType      // generic entity reference, not domain-specific
+    Payload    json.RawMessage
+    Source     EventSource     // REACTIVE | TEMPORAL | ANALYTICAL | SYSTEM
+    Timestamp  time.Time
 }
 ```
 
-All events are appended to an in-memory ledger (audit log).
-In production, this would write to Kafka/NATS + a persistent store.
+EntityID and EntityType are kept on the envelope for routing
+convenience. Technically these belong in Payload — kept here for
+ease of development, to be refactored later.
+
+Note: condition_key is NOT on the envelope. It is constructed by
+the Alert Generator when mapping events to proto-alerts.
+
+In production, the bus would be backed by Kafka/NATS.
 
 ### ActionItem Service
 
