@@ -130,6 +130,15 @@ Each bounded context lives in its own package under `backend/internal/`. Each co
 - CORS for cross-origin requests to backend (`rs/cors` on backend side)
 - Static serving via `serve` in production (no nginx)
 
+### Codegen
+
+When `schema.graphql` changes, both sides must regenerate:
+
+- **Backend**: `cd backend && go run github.com/99designs/gqlgen generate` — produces Go types in `graph/model/` and resolver stubs in `graph/`
+- **Frontend**: `cd frontend && npx graphql-codegen` — produces TypeScript types and typed hooks from the schema
+
+Run both after any schema change. The graphql-api context owns the schema; other contexts should not modify it.
+
 ## Current State
 
 <!-- Update this section as contexts are built and merged -->

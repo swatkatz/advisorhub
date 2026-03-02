@@ -58,6 +58,15 @@ Do NOT write all tests at once then implement. Do NOT write implementation witho
 - Use `sqlx` for database queries (not raw `database/sql`). All timestamps UTC.
 - Migrations: numbered SQL files (`001_create_clients.sql`, `002_create_accounts.sql`, etc.)
 
+## Codegen
+
+If your context modifies `schema.graphql` (only the graphql-api context should), run both codegen steps:
+
+- **Backend**: `cd backend && go run github.com/99designs/gqlgen generate`
+- **Frontend**: `cd frontend && npx graphql-codegen`
+
+If your context does NOT touch the schema, skip this.
+
 ## What NOT to do
 
 - Don't create a `domain/` package or shared types package
