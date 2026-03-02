@@ -138,9 +138,9 @@ Each bounded context lives in its own package under `backend/internal/`. Context
 - event-bus (EventEnvelope, EventSource, EntityType, pub/sub) — `specs/03-event-bus.md`
 - contribution-engine (Contribution, ContributionRule, room calc, CESG) — `specs/04-contribution-engine.md`
 - transfer-monitor (Transfer, TransferStatus, stage thresholds, stuck detection) — `specs/05-transfer-monitor.md`
+- temporal-scanner (TemporalRule, check functions, sweep) — `specs/06-temporal-scanner.md`
 
 ### Specs not started
-- temporal-scanner (TemporalRule, check functions, sweep)
 - alert (event→alert mapping, Alert, AlertSeverity, AlertStatus, AlertEventType, HealthStatus, dedup, state machine, LLM enhancement)
 - action-item-service (ActionItem, ActionItemStatus, CRUD)
 - graphql-api (resolvers, SSE subscriptions)
