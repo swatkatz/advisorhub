@@ -22,14 +22,12 @@ AdvisorHub — AI-powered dashboard for financial advisors. Surfaces prioritized
 ### Pipeline
 
 ```
-Event Producers → Event Bus → Alert Generator → Alert Lifecycle → Alert Enhancer → Dashboard
-                               (cheap mapper)    (dedup/state)    (LLM, conditional)
+Event Producers → Event Bus → Alert System → Dashboard
+                               (map → dedup/state → enhance)
 ```
 
 - **Event Producers:** Contribution Engine, Transfer Monitor, Temporal Scanner, Seed Data Loader
-- **Alert Generator:** Maps event_type → category + severity + condition_key + payload. Pure lookup, no business logic.
-- **Alert Lifecycle:** Dedup by condition_key, state transitions, cascade close. Returns signal: CREATED, REOPENED, UPDATED, NO_CHANGE.
-- **Alert Enhancer:** Called only on CREATED or REOPENED. LLM generates summary + draft message.
+- **Alert System:** Single package combining event→alert mapping, lifecycle (dedup, state machine, cascade close), and LLM enhancement. Subscribes to domain events, maps to proto-alerts, runs dedup/state transitions, and conditionally enhances (LLM summary + draft message on CREATED/REOPENED). Enhancer is behind an interface for testability.
 
 ### Directory Structure
 
@@ -54,9 +52,7 @@ advisorhub/
 │   │   ├── contribution/     ← contribution engine (CRA rules, room calc)
 │   │   ├── transfer/         ← transfer monitor (stuck detection)
 │   │   ├── temporal/         ← temporal scanner (rule-driven sweep)
-│   │   ├── alertgen/         ← alert generator (event → proto-alert mapper)
-│   │   ├── alert/            ← alert lifecycle (state machine, dedup, cascade)
-│   │   ├── alertenhancer/    ← alert enhancer (LLM summary + draft message)
+│   │   ├── alert/            ← alert system (mapping, lifecycle, enhancement)
 │   │   ├── actionitem/       ← action item CRUD
 │   │   └── seed/             ← seed data loader
 │   ├── graph/                ← gqlgen generated + resolvers
@@ -145,9 +141,7 @@ Each bounded context lives in its own package under `backend/internal/`. Context
 
 ### Specs not started
 - temporal-scanner (TemporalRule, check functions, sweep)
-- alert-generator (event→alert mapping, AlertCategoryRule)
-- alert-lifecycle (Alert, AlertSeverity, AlertStatus, AlertEventType, HealthStatus, dedup, state machine)
-- alert-enhancer (LLM summary + draft message)
+- alert (event→alert mapping, Alert, AlertSeverity, AlertStatus, AlertEventType, HealthStatus, dedup, state machine, LLM enhancement)
 - action-item-service (ActionItem, ActionItemStatus, CRUD)
 - graphql-api (resolvers, SSE subscriptions)
 - seed-data (seed loader, pre-computed events)
@@ -157,7 +151,7 @@ Each bounded context lives in its own package under `backend/internal/`. Context
 
 These are detailed in `docs/ARCHITECTURE.md` but repeated here for fast access:
 
-- **Pipeline:** Event Producers → Event Bus → Alert Generator (mapper) → Alert Lifecycle (dedup/state) → Alert Enhancer (LLM, only on CREATED/REOPENED) → Dashboard
+- **Pipeline:** Event Producers → Event Bus → Alert System (map → dedup/state → enhance on CREATED/REOPENED) → Dashboard
 - **Alert dedup:** by `condition_key`. Find most recent WHERE status ≠ CLOSED. If CLOSED, create new alert.
 - **Alert states:** OPEN → SNOOZED → OPEN (on expiry) | OPEN → ACTED → SNOOZED (auto) | Any non-CLOSED → CLOSED (on condition resolve)
 - **Cascade close:** when alert → CLOSED, all linked ActionItems → CLOSED with auto resolution note

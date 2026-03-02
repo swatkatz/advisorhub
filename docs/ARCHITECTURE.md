@@ -138,13 +138,11 @@ Each bounded context owns its entities, enums, and migrations. Cross-context ref
 | 04 | contribution-engine | Contribution, ContributionRule, room calc, over-contribution detection, CESG gap detection. | HIGH |
 | 05 | transfer-monitor | Transfer, TransferStatus, stage thresholds, stuck detection. | HIGH |
 | 06 | temporal-scanner | TemporalRule, check functions (AGE_APPROACHING, DEADLINE_WITH_ROOM, DAYS_SINCE, BALANCE_IDLE), sweep orchestration. | HIGH |
-| 07 | alert-generator | Event→alert mapping logic, AlertCategoryRule. Constructs `CreateAlertRequest` (type owned by alert-lifecycle). | MEDIUM |
-| 08 | alert-lifecycle | Alert, AlertSeverity, AlertStatus, AlertEventType, HealthStatus (computed), `CreateAlertRequest`, `UpdateAlertWithSummaryAndDraft`, dedup, state machine, cascade close. | HIGH |
-| 09 | alert-enhancer | LLM prompt/response logic. Constructs `UpdateAlertWithSummaryAndDraft` (type owned by alert-lifecycle). | MEDIUM |
-| 10 | action-item-service | ActionItem, ActionItemStatus, CRUD, status transitions. | LOW |
-| 11 | graphql-api | Resolvers, SSE subscriptions. Transport layer — no business logic. | MEDIUM |
-| 12 | seed-data | Seed loader, pre-computed events. | LOW |
-| 13 | frontend | React dashboard. | LOW |
+| 07 | alert | Alert, AlertSeverity, AlertStatus, AlertEventType, HealthStatus (computed), AlertCategoryRule (event→alert mapping), dedup, state machine, cascade close, LLM enhancement (behind Enhancer interface). Combines former alert-generator, alert-lifecycle, and alert-enhancer contexts. | HIGH |
+| 08 | action-item-service | ActionItem, ActionItemStatus, CRUD, status transitions. | LOW |
+| 09 | graphql-api | Resolvers, SSE subscriptions. Transport layer — no business logic. | MEDIUM |
+| 10 | seed-data | Seed loader, pre-computed events. | LOW |
+| 11 | frontend | React dashboard. | LOW |
 
 Dependencies flow top to bottom. Each context only depends on contexts above it.
 
@@ -283,7 +281,7 @@ When alert transitions to CLOSED:
 | Transfer Monitor           | TransferStatusChanged*, TransferStuck, TransferCompleted*          | REACTIVE   |
 | Temporal Scanner           | DeadlineApproaching, AgeMilestone, EngagementStale, CashUninvested | TEMPORAL   |
 | Analytical Engine (mocked) | PortfolioDrift, TaxLossOpportunity                                 | ANALYTICAL |
-| Alert Lifecycle            | AlertCreated, AlertClosed, AlertUpdated                            | SYSTEM     |
+| Alert System               | AlertCreated, AlertClosed, AlertUpdated                            | SYSTEM     |
 | Seed Data Loader           | ContributionProcessed, DividendReceived, TransferCompleted         | REACTIVE   |
 
 \* **Prototype note:** Transfer Monitor only emits `TransferStuck` in the prototype. `TransferStatusChanged` and `TransferCompleted` require real status transitions via institution webhooks (`UpdateTransferStatus`), which are stubbed. James's `TransferCompleted` is emitted by the Seed Data Loader as a pre-computed event instead.
@@ -292,31 +290,29 @@ When alert transitions to CLOSED:
 
 | Consumer         | Subscribes To                                                                                                                                                                                                        | What It Does                                                                                     |
 | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| Alert Generator  | OverContributionDetected, TransferStuck, DeadlineApproaching, AgeMilestone, CESGGap, EngagementStale, CashUninvested, PortfolioDrift, TaxLossOpportunity, TransferCompleted, ContributionProcessed, DividendReceived | Maps event → proto-alert, forwards to Alert Lifecycle                                            |
-| Alert Lifecycle  | (receives proto-alerts from Alert Generator, not directly from bus)                                                                                                                                                  | Dedup, state transitions, cascade close. Emits AlertCreated/AlertClosed/AlertUpdated back to bus |
-| Alert Enhancer   | AlertCreated, AlertUpdated (where signal = REOPENED)                                                                                                                                                                 | Calls LLM, writes summary + draft_message onto the alert                                         |
+| Alert System     | OverContributionDetected, TransferStuck, DeadlineApproaching, AgeMilestone, CESGGap, EngagementStale, CashUninvested, PortfolioDrift, TaxLossOpportunity, TransferCompleted, ContributionProcessed, DividendReceived | Maps event → proto-alert, runs dedup/state transitions, enhances (LLM) on CREATED/REOPENED. Emits AlertCreated/AlertClosed/AlertUpdated back to bus |
 | SSE Subscription | AlertCreated, AlertClosed, AlertUpdated                                                                                                                                                                              | Pushes to frontend via GraphQL subscription                                                      |
 
 #### Event Flow Diagram
 
 ```
-Contribution Engine ──▶ OverContributionDetected ──▶ Alert Generator ──▶ Alert Lifecycle ──▶ AlertCreated ──▶ Alert Enhancer
-                        CESGGap                                                              AlertClosed      SSE → Frontend
-                        ContributionRecorded                                                 AlertUpdated
+Contribution Engine ──▶ OverContributionDetected ──▶ Alert System ──▶ AlertCreated ──▶ SSE → Frontend
+                        CESGGap                      (map → dedup     AlertClosed
+                        ContributionRecorded           → enhance)     AlertUpdated
 
-Transfer Monitor ────▶ TransferStuck ──────────────▶ Alert Generator ──▶ (same)
+Transfer Monitor ────▶ TransferStuck ──────────────▶ Alert System ──▶ (same)
                        TransferCompleted
                        TransferStatusChanged
 
-Temporal Scanner ────▶ DeadlineApproaching ─────────▶ Alert Generator ──▶ (same)
+Temporal Scanner ────▶ DeadlineApproaching ─────────▶ Alert System ──▶ (same)
                        AgeMilestone
                        EngagementStale
                        CashUninvested
 
-Analytical Engine ───▶ PortfolioDrift ──────────────▶ Alert Generator ──▶ (same)
+Analytical Engine ───▶ PortfolioDrift ──────────────▶ Alert System ──▶ (same)
 (mocked)               TaxLossOpportunity
 
-Seed Data Loader ────▶ ContributionProcessed ───────▶ Alert Generator ──▶ (same)
+Seed Data Loader ────▶ ContributionProcessed ───────▶ Alert System ──▶ (same)
                        DividendReceived
 ```
 
@@ -472,59 +468,44 @@ BALANCE_IDLE(entity, params):
 **Triggered by:** `runMorningSweep` GraphQL mutation (button click
 in dashboard). In production, would also run on a cron schedule.
 
-### Alert Generator
+### Alert System
 
-Owns: Mapping raw domain events to proto-alerts. Pure lookup, no
-business logic.
+Single package (`backend/internal/alert/`) combining event→alert
+mapping, lifecycle state machine, and LLM enhancement.
 
-**Inputs:** Events from the bus (subscribes to all domain event types)
-**Outputs:** Proto-alerts passed to Alert Lifecycle
+**Inputs:** Events from the bus (subscribes to all domain event
+types), advisor actions from GraphQL mutations
+**Outputs:** Persisted alerts, AlertCreated/AlertUpdated/AlertClosed
+events, cascade close of ActionItems, LLM-generated summaries +
+draft messages
 
-For each event:
+**Event→alert mapping (internal):**
 
 1. Look up AlertCategoryRule by event_type → get category, severity,
    draft_message flag
 2. Construct condition_key from event payload (condition_key is
-   NOT on the EventEnvelope — the Alert Generator builds it)
+   NOT on the EventEnvelope — the alert system builds it)
 3. Extract client_id from event payload (or derive from EntityID
    when EntityType = Client)
 4. Build alert payload from event payload
 5. Create proto-alert: { condition_key, client_id, severity,
    category, status: OPEN, payload }
-5. Pass to Alert Lifecycle
 
-That's it. No computation, no rules, no LLM calls.
+**Lifecycle (internal):**
 
-### Alert Lifecycle
+Dedup, state transitions, cascade close. Logic covered in
+Section 2. Returns a signal per operation: CREATED, REOPENED,
+UPDATED, NO_CHANGE.
 
-Owns: Alert state machine, deduplication, cascade close.
+**Enhancement (internal, behind Enhancer interface):**
 
-**Inputs:** Proto-alerts from Alert Generator, advisor actions
-from GraphQL mutations
-**Outputs:** Persisted alerts, AlertCreated/AlertUpdated/AlertClosed
-events, cascade close of ActionItems
-
-Logic covered in Section 2. Returns a signal per operation:
-CREATED, REOPENED, UPDATED, NO_CHANGE.
-
-### Alert Enhancer
-
-Owns: Natural language generation via LLM.
-
-**Inputs:** Alerts where signal = CREATED or REOPENED
-**Outputs:** Updates alert with summary and draft_message fields
-
-**LLM prompt includes:**
-
-- Alert category and severity
-- Payload data (amounts, dates, institutions)
-- Client name and context (recent advisor notes, account summary)
-
-**Produces:**
-
-- summary: 1-2 sentence advisor-facing description
-- draft_message: suggested client email (only when
-  AlertCategoryRule.draft_message = true)
+Called only when signal = CREATED or REOPENED. LLM prompt includes
+alert category/severity, payload data, client name/context.
+Produces summary (1-2 sentence advisor-facing description) and
+draft_message (suggested client email, only when
+AlertCategoryRule.draft_message = true). Enhancer interface allows
+stub implementation for tests (e.g. deterministic string with
+alert ID to verify wiring).
 
 ### Event Bus
 
@@ -559,7 +540,7 @@ convenience. Technically these belong in Payload — kept here for
 ease of development, to be refactored later.
 
 Note: condition_key is NOT on the envelope. It is constructed by
-the Alert Generator when mapping events to proto-alerts.
+the alert system when mapping events to proto-alerts.
 
 In production, the bus would be backed by Kafka/NATS.
 
