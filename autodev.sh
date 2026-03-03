@@ -104,7 +104,7 @@ for i in $(seq 0 $((context_count - 1))); do
   echo "Dispatching Claude Code for $name..."
   echo ""
 
-  claude --dangerously-skip-permissions -p "/implement-spec $name"
+  claude --dangerously-skip-permissions -p "/implement-spec $name" 2>&1 | tee "/tmp/autodev-$name.log"
 
   # --- Run tests ---
 
@@ -126,9 +126,9 @@ for i in $(seq 0 $((context_count - 1))); do
     echo "Build succeeded."
     test_count="build-ok"
   else
-    # Go: run unit tests
+    # Go: run unit tests (go.mod is in backend/)
     pkg_dir="$pkg"
-    test_output=$(go test ./backend/internal/"$pkg_dir"/... -v -count=1 2>&1) || {
+    test_output=$(cd backend && go test ./internal/"$pkg_dir"/... -v -count=1 2>&1) || {
       echo "TESTS FAILED for $name"
       echo "$test_output"
       echo "| $name | $risk | — | FAIL | — | FAILED |" >> "$LEDGER"
