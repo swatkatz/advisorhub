@@ -6,3 +6,6 @@ Build started: 2026-03-03T00:49:11Z
 | ------- | ---- | -------- | ----- | ------ | ------ |
 | client  | LOW  | 3m       | 13    | Auto   | DONE   |
 | account | LOW  | 4m       | 19    | Auto   | DONE   |
+| client | LOW | — | — | — | SKIPPED (already merged) |
+| account | LOW | — | — | — | SKIPPED (already merged) |
+| event-bus | MEDIUM | 0m | (resumed) | Skimmed | DONE |
