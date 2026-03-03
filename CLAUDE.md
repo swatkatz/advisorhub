@@ -168,6 +168,7 @@ Run both after any schema change. The graphql-api context owns the schema; other
 
 - action-item-service (ActionItem, ActionItemStatus, CRUD, status transitions) — `specs/08-action-item-service.md`
 - contribution-engine (Contribution, ContributionRule, room calc, over-contribution, CESG gap) — `specs/04-contribution-engine.md`
+- transfer-monitor (Transfer, TransferStatus, stage thresholds, stuck detection) — `specs/05-transfer-monitor.md`
 
 ### Specs written
 
