@@ -67,7 +67,7 @@ All three must be in the same package. The Postgres implementation reads `DATABA
 ## Testing approach (Go contexts)
 
 - **Unit tests only.** No real database, no Docker, no testcontainers.
-- **Mock dependencies** using interfaces. If your context depends on another (e.g., temporal scanner depends on contribution engine), define the interface your context needs and create a mock implementation in the test file.
+- **Mock dependencies** using interfaces. If your context depends on another (e.g., temporal scanner depends on contribution engine), import the canonical interface from that context and create a mock implementation in the test file. The mock must satisfy the full canonical interface (add stub methods for unused methods).
 - **In-memory implementations** for repositories. Create a simple map-backed implementation in a `_test.go` or `testutil_test.go` file for testing.
 - Test business logic thoroughly. Don't test trivial getters/setters.
 - Tests run against the in-memory implementation, NOT the Postgres implementation.
@@ -79,8 +79,8 @@ All three must be in the same package. The Postgres implementation reads `DATABA
 - **Go 1.25+**
 - `context.Context` on all public functions
 - Errors: return `error`, don't panic. Wrap with `fmt.Errorf("doing x: %w", err)`
-- Each context owns its own types. Use primitive types (strings) for cross-context references.
-- Never import another context's package. If you depend on another context, define the interface you need in your own package.
+- Each context owns its own types. Use primitive types (strings) for cross-context ID references.
+- Import another context's **interfaces and domain types** (e.g., `account.AccountRepository`, `eventbus.EventEnvelope`). Do NOT import implementation types (constructors, unexported structs, concrete repos).
 - Repositories return data ordered by `id` by default. Sorting for display is the GraphQL resolver's job.
 - Use `sqlx` for database queries (not raw `database/sql`). All timestamps UTC.
 - Migrations: numbered SQL files (`001_create_clients.sql`, `002_create_accounts.sql`, etc.)

@@ -81,14 +81,14 @@ advisorhub/
     └── tsconfig.json
 ```
 
-Each bounded context lives in its own package under `backend/internal/`. Each context owns its own types. Cross-context references use primitive types (strings for IDs). Contexts communicate through the event bus or through interfaces — never by importing each other's packages directly.
+Each bounded context lives in its own package under `backend/internal/`. Each context owns its own types. Cross-context references use primitive types (strings for IDs). Contexts may import another context's **interfaces and domain types** (e.g., `account.AccountRepository`, `eventbus.EventEnvelope`) but must never import **implementation types** (e.g., constructors, unexported structs, concrete repos). This eliminates interface duplication while keeping contexts decoupled from internal implementations.
 
 ## How to Work
 
 1. **Read your spec first.** Your assigned spec is in `specs/`. It defines what you own, what you don't own, your contracts, and test anchors.
 2. **Read `docs/ARCHITECTURE.md`** for domain model and architectural context if your spec references entities or patterns defined there.
 3. **Write tests first.** Use the test anchors from your spec as starting points. Write a failing test, then implement. No exceptions.
-4. **Stay in your bounded context.** Only modify files in your assigned package. Each context owns its own types. Use primitive types (strings) for cross-context references like IDs.
+4. **Stay in your bounded context.** Only modify files in your assigned package. Import another context's interfaces and domain types (not implementation types). Use primitive types (strings) for cross-context ID references.
 5. **Log non-obvious decisions.** If you make a choice not dictated by the spec (data structure selection, error handling approach, etc.), add a comment or note in your commit message explaining why.
 6. **Don't touch other bounded contexts.** If your spec says "Depends on: event-bus", you import and use its public interface. You do not modify it.
 
@@ -169,13 +169,13 @@ Run both after any schema change. The graphql-api context owns the schema; other
 - action-item-service (ActionItem, ActionItemStatus, CRUD, status transitions) — `specs/08-action-item-service.md`
 - contribution-engine (Contribution, ContributionRule, room calc, over-contribution, CESG gap) — `specs/04-contribution-engine.md`
 - transfer-monitor (Transfer, TransferStatus, stage thresholds, stuck detection) — `specs/05-transfer-monitor.md`
+- temporal-scanner (TemporalRule, check functions, sweep) — `specs/06-temporal-scanner.md`
 
 ### Specs written
 
 - client (Client, Household, Advisor, AdvisorNote, Goal) — `specs/01-client.md`
 - account (Account, AccountType, RESPBeneficiary) — `specs/02-account.md`
 - transfer-monitor (Transfer, TransferStatus, stage thresholds, stuck detection) — `specs/05-transfer-monitor.md`
-- temporal-scanner (TemporalRule, check functions, sweep) — `specs/06-temporal-scanner.md`
 - alert (Alert, AlertCategoryRule, dedup, state machine, cascade close, LLM enhancement) — `specs/07-alert.md`
 - action-item-service (ActionItem, ActionItemStatus, CRUD, status transitions) — `specs/08-action-item-service.md`
 - graphql-api (resolvers, SSE subscriptions, Railway deployment) — `specs/09-graphql-api.md`

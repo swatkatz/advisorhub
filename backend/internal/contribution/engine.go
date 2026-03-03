@@ -6,23 +6,26 @@ import (
 	"fmt"
 	"math"
 	"time"
+
+	"github.com/swatkatz/advisorhub/backend/internal/account"
+	"github.com/swatkatz/advisorhub/backend/internal/eventbus"
 )
 
 // engine implements ContributionEngine.
 type engine struct {
 	repo     ContributionRepository
-	accounts AccountRepository
-	resp     RESPBeneficiaryRepository
-	bus      EventBus
+	accounts account.AccountRepository
+	resp     account.RESPBeneficiaryRepository
+	bus      eventbus.EventBus
 	now      func() time.Time
 }
 
 // NewEngine creates a new ContributionEngine.
 func NewEngine(
 	repo ContributionRepository,
-	accounts AccountRepository,
-	resp RESPBeneficiaryRepository,
-	bus EventBus,
+	accounts account.AccountRepository,
+	resp account.RESPBeneficiaryRepository,
+	bus eventbus.EventBus,
 ) ContributionEngine {
 	return &engine{
 		repo:     repo,
@@ -189,7 +192,7 @@ func (e *engine) checkOverContribution(ctx context.Context, clientID string, acc
 	return nil
 }
 
-func (e *engine) checkFHSALifetime(ctx context.Context, clientID string, accounts []Account) error {
+func (e *engine) checkFHSALifetime(ctx context.Context, clientID string, accounts []account.Account) error {
 	for _, acct := range accounts {
 		if acct.AccountType != AccountTypeFHSA {
 			continue
@@ -216,7 +219,7 @@ func (e *engine) checkFHSALifetime(ctx context.Context, clientID string, account
 	return nil
 }
 
-func (e *engine) checkCESGGaps(ctx context.Context, clientID string, taxYear int, contributions []Contribution, accounts []Account) error {
+func (e *engine) checkCESGGaps(ctx context.Context, clientID string, taxYear int, contributions []Contribution, accounts []account.Account) error {
 	beneficiaries, err := e.resp.GetRESPBeneficiariesByClientID(ctx, clientID)
 	if err != nil {
 		return fmt.Errorf("getting RESP beneficiaries: %w", err)
@@ -256,11 +259,11 @@ func (e *engine) checkCESGGaps(ctx context.Context, clientID string, taxYear int
 			gap := CESGEligibleMax - contributedYTD
 			grantLoss := gap * CESGMatchRate
 			payload := map[string]any{
-				"client_id":          clientID,
-				"beneficiary_id":     ben.ID,
-				"contributed_ytd":    contributedYTD,
-				"cesg_eligible_max":  CESGEligibleMax,
-				"gap_amount":         gap,
+				"client_id":            clientID,
+				"beneficiary_id":       ben.ID,
+				"contributed_ytd":      contributedYTD,
+				"cesg_eligible_max":    CESGEligibleMax,
+				"gap_amount":           gap,
 				"potential_grant_loss": grantLoss,
 			}
 			if err := e.publishEvent(ctx, clientID, EventCESGGap, payload); err != nil {
@@ -286,7 +289,7 @@ func (e *engine) GetContributionSummary(ctx context.Context, clientID string, ta
 	// Determine which account types the client holds
 	heldTypes := make(map[string]bool)
 	for _, a := range accounts {
-		heldTypes[a.AccountType] = true
+		heldTypes[string(a.AccountType)] = true
 	}
 
 	// Sum contributions by type
@@ -461,13 +464,13 @@ func (e *engine) publishEvent(ctx context.Context, clientID string, eventType st
 	if err != nil {
 		return fmt.Errorf("marshaling event payload: %w", err)
 	}
-	return e.bus.Publish(ctx, EventEnvelope{
+	return e.bus.Publish(ctx, eventbus.EventEnvelope{
 		ID:         fmt.Sprintf("evt_%s_%s_%d", eventType, clientID, e.now().UnixNano()),
 		Type:       eventType,
 		EntityID:   clientID,
-		EntityType: EntityTypeClient,
+		EntityType: eventbus.EntityTypeClient,
 		Payload:    data,
-		Source:     SourceReactive,
+		Source:     eventbus.SourceReactive,
 		Timestamp:  e.now(),
 	})
 }

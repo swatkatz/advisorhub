@@ -5,17 +5,19 @@ import (
 	"encoding/json"
 	"fmt"
 	"time"
+
+	"github.com/swatkatz/advisorhub/backend/internal/eventbus"
 )
 
 // monitor implements the TransferMonitor interface.
 type monitor struct {
 	repo TransferRepository
-	bus  EventBus
+	bus  eventbus.EventBus
 	now  func() time.Time
 }
 
 // NewMonitor creates a new TransferMonitor.
-func NewMonitor(repo TransferRepository, bus EventBus) TransferMonitor {
+func NewMonitor(repo TransferRepository, bus eventbus.EventBus) TransferMonitor {
 	return &monitor{
 		repo: repo,
 		bus:  bus,
@@ -75,13 +77,13 @@ func (m *monitor) emitTransferStuck(ctx context.Context, t *Transfer, daysInStag
 	if err != nil {
 		return fmt.Errorf("marshaling TransferStuck payload: %w", err)
 	}
-	return m.bus.Publish(ctx, EventEnvelope{
+	return m.bus.Publish(ctx, eventbus.EventEnvelope{
 		ID:         fmt.Sprintf("evt_%s_%s_%d", EventTransferStuck, t.ID, now.UnixNano()),
 		Type:       EventTransferStuck,
 		EntityID:   t.ID,
-		EntityType: EntityTypeTransfer,
+		EntityType: eventbus.EntityTypeTransfer,
 		Payload:    data,
-		Source:     SourceReactive,
+		Source:     eventbus.SourceReactive,
 		Timestamp:  now,
 	})
 }

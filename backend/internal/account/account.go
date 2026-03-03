@@ -33,14 +33,15 @@ func (t AccountType) LifetimeCap() *float64 {
 
 // Account represents a financial account belonging to a client.
 type Account struct {
-	ID                       string
-	ClientID                 string
-	AccountType              AccountType
-	Institution              string
-	Balance                  float64
-	IsExternal               bool
-	RESPBeneficiaryID        *string
+	ID                        string
+	ClientID                  string
+	AccountType               AccountType
+	Institution               string
+	Balance                   float64
+	IsExternal                bool
+	RESPBeneficiaryID         *string
 	FHSALifetimeContributions float64
+	LastActivityDate          time.Time
 }
 
 // RESPBeneficiary represents a child beneficiary of an RESP account.

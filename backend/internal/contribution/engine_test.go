@@ -6,6 +6,9 @@ import (
 	"sort"
 	"testing"
 	"time"
+
+	"github.com/swatkatz/advisorhub/backend/internal/account"
+	"github.com/swatkatz/advisorhub/backend/internal/eventbus"
 )
 
 func setupEngine() (*engine, *memoryContributionRepo, *memoryAccountRepo, *memoryRESPBeneficiaryRepo, *memoryEventBus) {
@@ -28,8 +31,8 @@ func TestGetRoom_RRSP_TwoInstitutions(t *testing.T) {
 	e, contribRepo, accountRepo, _, _ := setupEngine()
 	ctx := context.Background()
 
-	accountRepo.addAccount(Account{ID: "a1", ClientID: "c1", AccountType: AccountTypeRRSP, Institution: "Wealthsimple"})
-	accountRepo.addAccount(Account{ID: "a2", ClientID: "c1", AccountType: AccountTypeRRSP, Institution: "RBC", IsExternal: true})
+	accountRepo.addAccount(account.Account{ID: "a1", ClientID: "c1", AccountType: AccountTypeRRSP, Institution: "Wealthsimple"})
+	accountRepo.addAccount(account.Account{ID: "a2", ClientID: "c1", AccountType: AccountTypeRRSP, Institution: "RBC", IsExternal: true})
 
 	contribRepo.addLimit(ClientContributionLimit{ID: "ccl1", ClientID: "c1", TaxYear: 2026, RRSPDeductionLimit: 32490})
 	contribRepo.addContribution(Contribution{ID: "ct1", ClientID: "c1", AccountID: "a1", AccountType: AccountTypeRRSP, Amount: 12000, Date: time.Now(), TaxYear: 2026})
@@ -119,8 +122,8 @@ func TestAnalyzeClient_RRSP_OverContribution(t *testing.T) {
 	e, contribRepo, accountRepo, _, bus := setupEngine()
 	ctx := context.Background()
 
-	accountRepo.addAccount(Account{ID: "a1", ClientID: "c1", AccountType: AccountTypeRRSP, Institution: "Wealthsimple"})
-	accountRepo.addAccount(Account{ID: "a2", ClientID: "c1", AccountType: AccountTypeRRSP, Institution: "RBC", IsExternal: true})
+	accountRepo.addAccount(account.Account{ID: "a1", ClientID: "c1", AccountType: AccountTypeRRSP, Institution: "Wealthsimple"})
+	accountRepo.addAccount(account.Account{ID: "a2", ClientID: "c1", AccountType: AccountTypeRRSP, Institution: "RBC", IsExternal: true})
 
 	contribRepo.addLimit(ClientContributionLimit{ID: "ccl1", ClientID: "c1", TaxYear: 2026, RRSPDeductionLimit: 31560})
 	contribRepo.addContribution(Contribution{ID: "ct1", ClientID: "c1", AccountID: "a1", AccountType: AccountTypeRRSP, Amount: 18860, Date: time.Now(), TaxYear: 2026})
@@ -166,7 +169,7 @@ func TestAnalyzeClient_TFSA_OverContribution(t *testing.T) {
 	e, contribRepo, accountRepo, _, bus := setupEngine()
 	ctx := context.Background()
 
-	accountRepo.addAccount(Account{ID: "a1", ClientID: "c1", AccountType: AccountTypeTFSA, Institution: "Wealthsimple"})
+	accountRepo.addAccount(account.Account{ID: "a1", ClientID: "c1", AccountType: AccountTypeTFSA, Institution: "Wealthsimple"})
 	contribRepo.addContribution(Contribution{ID: "ct1", ClientID: "c1", AccountID: "a1", AccountType: AccountTypeTFSA, Amount: 7500, Date: time.Now(), TaxYear: 2026})
 
 	err := e.AnalyzeClient(ctx, "c1", 2026)
@@ -175,7 +178,7 @@ func TestAnalyzeClient_TFSA_OverContribution(t *testing.T) {
 	}
 
 	events := bus.eventsByType(EventOverContributionDetected)
-	var tfsaEvent *EventEnvelope
+	var tfsaEvent *eventbus.EventEnvelope
 	for i, ev := range events {
 		p := parsePayload(t, ev.Payload)
 		if p["account_type"] == "TFSA" {
@@ -201,7 +204,7 @@ func TestAnalyzeClient_FHSA_LifetimeCap(t *testing.T) {
 	e, contribRepo, accountRepo, _, bus := setupEngine()
 	ctx := context.Background()
 
-	accountRepo.addAccount(Account{
+	accountRepo.addAccount(account.Account{
 		ID: "a1", ClientID: "c1", AccountType: AccountTypeFHSA,
 		Institution: "Wealthsimple", FHSALifetimeContributions: 44000, // $38K prior + $6K this year
 	})
@@ -215,7 +218,7 @@ func TestAnalyzeClient_FHSA_LifetimeCap(t *testing.T) {
 
 	events := bus.eventsByType(EventOverContributionDetected)
 	// Should have a lifetime_cap event (FHSA annual is fine at $6K < $8K, but lifetime $44K > $40K)
-	var lifetimeEvent *EventEnvelope
+	var lifetimeEvent *eventbus.EventEnvelope
 	for i, ev := range events {
 		p := parsePayload(t, ev.Payload)
 		if p["reason"] == "lifetime_cap" {
@@ -238,7 +241,7 @@ func TestAnalyzeClient_FHSA_AnnualLimit(t *testing.T) {
 	e, contribRepo, accountRepo, _, bus := setupEngine()
 	ctx := context.Background()
 
-	accountRepo.addAccount(Account{
+	accountRepo.addAccount(account.Account{
 		ID: "a1", ClientID: "c1", AccountType: AccountTypeFHSA,
 		Institution: "Wealthsimple", FHSALifetimeContributions: 25000,
 	})
@@ -250,7 +253,7 @@ func TestAnalyzeClient_FHSA_AnnualLimit(t *testing.T) {
 	}
 
 	events := bus.eventsByType(EventOverContributionDetected)
-	var annualEvent *EventEnvelope
+	var annualEvent *eventbus.EventEnvelope
 	for i, ev := range events {
 		p := parsePayload(t, ev.Payload)
 		if p["reason"] == "annual_limit" && p["account_type"] == "FHSA" {
@@ -273,9 +276,9 @@ func TestAnalyzeClient_RRSP_ThreeInstitutions(t *testing.T) {
 	e, contribRepo, accountRepo, _, bus := setupEngine()
 	ctx := context.Background()
 
-	accountRepo.addAccount(Account{ID: "a1", ClientID: "c1", AccountType: AccountTypeRRSP, Institution: "Wealthsimple"})
-	accountRepo.addAccount(Account{ID: "a2", ClientID: "c1", AccountType: AccountTypeRRSP, Institution: "RBC", IsExternal: true})
-	accountRepo.addAccount(Account{ID: "a3", ClientID: "c1", AccountType: AccountTypeRRSP, Institution: "TD", IsExternal: true})
+	accountRepo.addAccount(account.Account{ID: "a1", ClientID: "c1", AccountType: AccountTypeRRSP, Institution: "Wealthsimple"})
+	accountRepo.addAccount(account.Account{ID: "a2", ClientID: "c1", AccountType: AccountTypeRRSP, Institution: "RBC", IsExternal: true})
+	accountRepo.addAccount(account.Account{ID: "a3", ClientID: "c1", AccountType: AccountTypeRRSP, Institution: "TD", IsExternal: true})
 
 	contribRepo.addLimit(ClientContributionLimit{ID: "ccl1", ClientID: "c1", TaxYear: 2026, RRSPDeductionLimit: 30000})
 	contribRepo.addContribution(Contribution{ID: "ct1", ClientID: "c1", AccountID: "a1", AccountType: AccountTypeRRSP, Amount: 15000, Date: time.Now(), TaxYear: 2026})
@@ -321,11 +324,11 @@ func TestAnalyzeClient_CESGGap(t *testing.T) {
 	ctx := context.Background()
 
 	benID := "resp_ben_1"
-	accountRepo.addAccount(Account{
+	accountRepo.addAccount(account.Account{
 		ID: "a1", ClientID: "c1", AccountType: AccountTypeRESP,
 		Institution: "Wealthsimple", RESPBeneficiaryID: &benID,
 	})
-	respRepo.addBeneficiary(RESPBeneficiary{
+	respRepo.addBeneficiary(account.RESPBeneficiary{
 		ID: benID, ClientID: "c1", Name: "Test Child",
 		LifetimeContributions: 38200,
 	})
@@ -362,11 +365,11 @@ func TestAnalyzeClient_NoCESGGap_FullMatch(t *testing.T) {
 	ctx := context.Background()
 
 	benID := "resp_ben_1"
-	accountRepo.addAccount(Account{
+	accountRepo.addAccount(account.Account{
 		ID: "a1", ClientID: "c1", AccountType: AccountTypeRESP,
 		Institution: "Wealthsimple", RESPBeneficiaryID: &benID,
 	})
-	respRepo.addBeneficiary(RESPBeneficiary{
+	respRepo.addBeneficiary(account.RESPBeneficiary{
 		ID: benID, ClientID: "c1", Name: "Test Child",
 		LifetimeContributions: 30000,
 	})
@@ -392,11 +395,11 @@ func TestAnalyzeClient_NoCESGGap_LifetimeCapReached(t *testing.T) {
 	ctx := context.Background()
 
 	benID := "resp_ben_1"
-	accountRepo.addAccount(Account{
+	accountRepo.addAccount(account.Account{
 		ID: "a1", ClientID: "c1", AccountType: AccountTypeRESP,
 		Institution: "Wealthsimple", RESPBeneficiaryID: &benID,
 	})
-	respRepo.addBeneficiary(RESPBeneficiary{
+	respRepo.addBeneficiary(account.RESPBeneficiary{
 		ID: benID, ClientID: "c1", Name: "Test Child",
 		LifetimeContributions: 50000, // at lifetime cap
 	})
@@ -421,9 +424,9 @@ func TestGetContributionSummary_MultipleTypes(t *testing.T) {
 	e, contribRepo, accountRepo, _, _ := setupEngine()
 	ctx := context.Background()
 
-	accountRepo.addAccount(Account{ID: "a1", ClientID: "c1", AccountType: AccountTypeRRSP, Institution: "Wealthsimple"})
-	accountRepo.addAccount(Account{ID: "a2", ClientID: "c1", AccountType: AccountTypeTFSA, Institution: "Wealthsimple"})
-	accountRepo.addAccount(Account{ID: "a3", ClientID: "c1", AccountType: AccountTypeFHSA, Institution: "Wealthsimple"})
+	accountRepo.addAccount(account.Account{ID: "a1", ClientID: "c1", AccountType: AccountTypeRRSP, Institution: "Wealthsimple"})
+	accountRepo.addAccount(account.Account{ID: "a2", ClientID: "c1", AccountType: AccountTypeTFSA, Institution: "Wealthsimple"})
+	accountRepo.addAccount(account.Account{ID: "a3", ClientID: "c1", AccountType: AccountTypeFHSA, Institution: "Wealthsimple"})
 
 	contribRepo.addLimit(ClientContributionLimit{ID: "ccl1", ClientID: "c1", TaxYear: 2026, RRSPDeductionLimit: 32490})
 	contribRepo.addContribution(Contribution{ID: "ct1", ClientID: "c1", AccountID: "a1", AccountType: AccountTypeRRSP, Amount: 10000, Date: time.Now(), TaxYear: 2026})
@@ -502,8 +505,8 @@ func TestGetContributionSummary_NoContributions(t *testing.T) {
 	e, _, accountRepo, _, _ := setupEngine()
 	ctx := context.Background()
 
-	accountRepo.addAccount(Account{ID: "a1", ClientID: "c1", AccountType: AccountTypeRRSP, Institution: "Wealthsimple"})
-	accountRepo.addAccount(Account{ID: "a2", ClientID: "c1", AccountType: AccountTypeTFSA, Institution: "Wealthsimple"})
+	accountRepo.addAccount(account.Account{ID: "a1", ClientID: "c1", AccountType: AccountTypeRRSP, Institution: "Wealthsimple"})
+	accountRepo.addAccount(account.Account{ID: "a2", ClientID: "c1", AccountType: AccountTypeTFSA, Institution: "Wealthsimple"})
 
 	summary, err := e.GetContributionSummary(ctx, "c1", 2026)
 	if err != nil {
@@ -532,7 +535,7 @@ func TestRecordContribution_FHSA_UpdatesLifetime(t *testing.T) {
 	e, contribRepo, accountRepo, _, _ := setupEngine()
 	ctx := context.Background()
 
-	accountRepo.addAccount(Account{
+	accountRepo.addAccount(account.Account{
 		ID: "a1", ClientID: "c1", AccountType: AccountTypeFHSA,
 		Institution: "Wealthsimple", FHSALifetimeContributions: 10000,
 	})
@@ -589,11 +592,11 @@ func TestRecordContribution_RESP_UpdatesBeneficiaryLifetime(t *testing.T) {
 	ctx := context.Background()
 
 	benID := "resp_ben_1"
-	accountRepo.addAccount(Account{
+	accountRepo.addAccount(account.Account{
 		ID: "a1", ClientID: "c1", AccountType: AccountTypeRESP,
 		Institution: "Wealthsimple", RESPBeneficiaryID: &benID,
 	})
-	respRepo.addBeneficiary(RESPBeneficiary{
+	respRepo.addBeneficiary(account.RESPBeneficiary{
 		ID: benID, ClientID: "c1", Name: "Test Child",
 		LifetimeContributions: 20000,
 	})

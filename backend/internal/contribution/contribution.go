@@ -54,55 +54,6 @@ type ContributionRepository interface {
 	SaveClientContributionLimit(ctx context.Context, limit *ClientContributionLimit) (*ClientContributionLimit, error)
 }
 
-// AccountRepository defines what the contribution engine needs from the account context.
-type AccountRepository interface {
-	GetAccountsByClientID(ctx context.Context, clientID string) ([]Account, error)
-	UpdateFHSALifetimeContributions(ctx context.Context, accountID string, total float64) error
-}
-
-// RESPBeneficiaryRepository defines what the contribution engine needs from the account context.
-type RESPBeneficiaryRepository interface {
-	GetRESPBeneficiariesByClientID(ctx context.Context, clientID string) ([]RESPBeneficiary, error)
-	UpdateLifetimeContributions(ctx context.Context, beneficiaryID string, total float64) error
-}
-
-// Account is a local representation of account data needed by this context.
-type Account struct {
-	ID                        string
-	ClientID                  string
-	AccountType               string
-	Institution               string
-	Balance                   float64
-	IsExternal                bool
-	RESPBeneficiaryID         *string
-	FHSALifetimeContributions float64
-}
-
-// RESPBeneficiary is a local representation of beneficiary data needed by this context.
-type RESPBeneficiary struct {
-	ID                    string
-	ClientID              string
-	Name                  string
-	DateOfBirth           time.Time
-	LifetimeContributions float64
-}
-
-// EventBus defines what the contribution engine needs from the event-bus context.
-type EventBus interface {
-	Publish(ctx context.Context, envelope EventEnvelope) error
-}
-
-// EventEnvelope is a local representation of the event envelope.
-type EventEnvelope struct {
-	ID         string
-	Type       string
-	EntityID   string
-	EntityType string
-	Payload    []byte
-	Source     string
-	Timestamp  time.Time
-}
-
 // ContributionEngine is the public interface for contribution analysis.
 type ContributionEngine interface {
 	AnalyzeClient(ctx context.Context, clientID string, taxYear int) error
