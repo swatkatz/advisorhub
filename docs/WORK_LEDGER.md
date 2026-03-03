@@ -29,3 +29,5 @@ Build started: 2026-03-03T00:49:11Z
 | transfer-monitor | HIGH | — | — | — | SKIPPED (already merged) |
 | temporal-scanner | HIGH | — | — | — | SKIPPED (already merged) |
 | alert | HIGH | — | — | — | SKIPPED (already merged) |
+| seed-data | LOW | 7m | 0
+0 | Auto | DONE |
