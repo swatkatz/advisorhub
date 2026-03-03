@@ -160,7 +160,7 @@ Run both after any schema change. The graphql-api context owns the schema; other
 
 ### Built and merged
 
-- (none yet)
+- client (Client, Household, Advisor, AdvisorNote, Goal) — `specs/01-client.md`
 
 ### In progress
 
