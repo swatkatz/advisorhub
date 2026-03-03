@@ -68,10 +68,10 @@ advisorhub/
 │   │   ├── temporal/         ← temporal scanner (rule-driven sweep)
 │   │   ├── alert/            ← alert system (mapping, lifecycle, enhancement)
 │   │   ├── actionitem/       ← action item CRUD
-│   │   └── seed/             ← seed data loader
-│   ├── graph/                ← gqlgen generated + resolvers
-│   │   ├── resolver.go
-│   │   └── model/
+│   │   ├── seed/             ← seed data loader
+│   │   └── graph/            ← gqlgen generated + resolvers
+│   │       ├── resolver.go
+│   │       └── model/
 │   ├── migrations/           ← SQL migrations (numbered)
 │   ├── go.mod
 │   └── go.sum
@@ -130,7 +130,7 @@ Each bounded context lives in its own package under `backend/internal/`. Each co
 
 - Schema in `schema.graphql` at project root (shared by backend + frontend)
 - gqlgen config in `backend/gqlgen.yml`
-- Resolvers in `backend/graph/resolver.go` (or split by type)
+- Resolvers in `backend/internal/graph/resolver.go` (or split by type)
 - SSE transport enabled for subscriptions
 - Mutations: `sendAlert`, `trackAlert`, `snoozeAlert`, `acknowledgeAlert`, `createActionItem`, `updateActionItem`, `addNote`, `runMorningSweep`
 
