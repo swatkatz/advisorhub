@@ -54,12 +54,23 @@ Do NOT write all tests at once then implement. Do NOT write implementation witho
 2. Implement components following the spec's section order
 3. Verify the build passes: `cd frontend && npm run build`
 
+## Repository pattern (Go contexts)
+
+Each context that has a data model must ship three layers:
+
+1. **Interface** — the repository contract (e.g., `ClientRepository` interface)
+2. **PostgreSQL implementation** — the real implementation using `sqlx` (e.g., `postgres_client.go`). This is what `server.go` wires up at startup.
+3. **In-memory implementation** — a map-backed mock used in tests (e.g., in `_test.go` or `testutil_test.go`)
+
+All three must be in the same package. The Postgres implementation reads `DATABASE_URL` from the environment or accepts a `*sqlx.DB` passed in.
+
 ## Testing approach (Go contexts)
 
 - **Unit tests only.** No real database, no Docker, no testcontainers.
 - **Mock dependencies** using interfaces. If your context depends on another (e.g., temporal scanner depends on contribution engine), define the interface your context needs and create a mock implementation in the test file.
 - **In-memory implementations** for repositories. Create a simple map-backed implementation in a `_test.go` or `testutil_test.go` file for testing.
 - Test business logic thoroughly. Don't test trivial getters/setters.
+- Tests run against the in-memory implementation, NOT the Postgres implementation.
 
 ## Implementation conventions
 
