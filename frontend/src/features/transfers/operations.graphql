@@ -1,0 +1,16 @@
+query GetTransfers($advisorId: ID!) {
+  transfers(advisorId: $advisorId) {
+    id
+    client {
+      id
+      name
+    }
+    sourceInstitution
+    accountType
+    amount
+    status
+    initiatedAt
+    daysInCurrentStage
+    isStuck
+  }
+}

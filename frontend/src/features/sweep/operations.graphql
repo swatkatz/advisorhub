@@ -1,0 +1,8 @@
+mutation RunMorningSweep($advisorId: ID!) {
+  runMorningSweep(advisorId: $advisorId) {
+    alertsGenerated
+    alertsUpdated
+    alertsSkipped
+    duration
+  }
+}

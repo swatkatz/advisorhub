@@ -1,0 +1,95 @@
+query GetAlerts($advisorId: ID!, $filter: AlertFilter) {
+  alerts(advisorId: $advisorId, filter: $filter) {
+    id
+    conditionKey
+    client {
+      id
+      name
+    }
+    severity
+    category
+    status
+    snoozedUntil
+    summary
+    draftMessage
+    linkedActionItems {
+      id
+      text
+      status
+    }
+    createdAt
+    updatedAt
+  }
+}
+
+mutation SendAlert($alertId: ID!, $message: String) {
+  sendAlert(alertId: $alertId, message: $message) {
+    id
+    status
+    summary
+    draftMessage
+    linkedActionItems {
+      id
+      text
+      status
+    }
+    updatedAt
+  }
+}
+
+mutation TrackAlert($alertId: ID!, $actionItemText: String!) {
+  trackAlert(alertId: $alertId, actionItemText: $actionItemText) {
+    id
+    status
+    linkedActionItems {
+      id
+      text
+      status
+    }
+    updatedAt
+  }
+}
+
+mutation SnoozeAlert($alertId: ID!, $until: DateTime) {
+  snoozeAlert(alertId: $alertId, until: $until) {
+    id
+    status
+    snoozedUntil
+    updatedAt
+  }
+}
+
+mutation AcknowledgeAlert($alertId: ID!) {
+  acknowledgeAlert(alertId: $alertId) {
+    id
+    status
+    updatedAt
+  }
+}
+
+subscription AlertFeed($advisorId: ID!) {
+  alertFeed(advisorId: $advisorId) {
+    type
+    alert {
+      id
+      conditionKey
+      client {
+        id
+        name
+      }
+      severity
+      category
+      status
+      snoozedUntil
+      summary
+      draftMessage
+      linkedActionItems {
+        id
+        text
+        status
+      }
+      createdAt
+      updatedAt
+    }
+  }
+}
