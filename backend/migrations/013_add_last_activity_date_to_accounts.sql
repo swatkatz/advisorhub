@@ -1,0 +1,1 @@
+ALTER TABLE accounts ADD COLUMN last_activity_date TIMESTAMPTZ NOT NULL DEFAULT NOW();

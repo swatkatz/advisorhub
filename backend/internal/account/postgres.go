@@ -9,14 +9,15 @@ import (
 )
 
 type accountRow struct {
-	ID                        string  `db:"id"`
-	ClientID                  string  `db:"client_id"`
-	AccountType               string  `db:"account_type"`
-	Institution               string  `db:"institution"`
-	Balance                   float64 `db:"balance"`
-	IsExternal                bool    `db:"is_external"`
-	RESPBeneficiaryID         *string `db:"resp_beneficiary_id"`
-	FHSALifetimeContributions float64 `db:"fhsa_lifetime_contributions"`
+	ID                        string    `db:"id"`
+	ClientID                  string    `db:"client_id"`
+	AccountType               string    `db:"account_type"`
+	Institution               string    `db:"institution"`
+	Balance                   float64   `db:"balance"`
+	IsExternal                bool      `db:"is_external"`
+	RESPBeneficiaryID         *string   `db:"resp_beneficiary_id"`
+	FHSALifetimeContributions float64   `db:"fhsa_lifetime_contributions"`
+	LastActivityDate          time.Time `db:"last_activity_date"`
 }
 
 func accountFromRow(r accountRow) Account {
@@ -29,6 +30,7 @@ func accountFromRow(r accountRow) Account {
 		IsExternal:                r.IsExternal,
 		RESPBeneficiaryID:         r.RESPBeneficiaryID,
 		FHSALifetimeContributions: r.FHSALifetimeContributions,
+		LastActivityDate:          r.LastActivityDate,
 	}
 }
 
@@ -62,7 +64,7 @@ func NewPostgresAccountRepo(db *sqlx.DB) *PostgresAccountRepo {
 
 func (r *PostgresAccountRepo) GetAccount(ctx context.Context, id string) (*Account, error) {
 	var row accountRow
-	err := r.db.GetContext(ctx, &row, "SELECT id, client_id, account_type, institution, balance, is_external, resp_beneficiary_id, fhsa_lifetime_contributions FROM accounts WHERE id = $1", id)
+	err := r.db.GetContext(ctx, &row, "SELECT id, client_id, account_type, institution, balance, is_external, resp_beneficiary_id, fhsa_lifetime_contributions, last_activity_date FROM accounts WHERE id = $1", id)
 	if err != nil {
 		return nil, fmt.Errorf("getting account %s: %w", id, err)
 	}
@@ -72,7 +74,7 @@ func (r *PostgresAccountRepo) GetAccount(ctx context.Context, id string) (*Accou
 
 func (r *PostgresAccountRepo) GetAccountsByClientID(ctx context.Context, clientID string) ([]Account, error) {
 	var rows []accountRow
-	err := r.db.SelectContext(ctx, &rows, "SELECT id, client_id, account_type, institution, balance, is_external, resp_beneficiary_id, fhsa_lifetime_contributions FROM accounts WHERE client_id = $1 ORDER BY id", clientID)
+	err := r.db.SelectContext(ctx, &rows, "SELECT id, client_id, account_type, institution, balance, is_external, resp_beneficiary_id, fhsa_lifetime_contributions, last_activity_date FROM accounts WHERE client_id = $1 ORDER BY id", clientID)
 	if err != nil {
 		return nil, fmt.Errorf("getting accounts for client %s: %w", clientID, err)
 	}
