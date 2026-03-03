@@ -6,24 +6,29 @@ import (
 	"fmt"
 	"log"
 	"time"
+
+	"github.com/swatkatz/advisorhub/backend/internal/account"
+	"github.com/swatkatz/advisorhub/backend/internal/client"
+	"github.com/swatkatz/advisorhub/backend/internal/contribution"
+	"github.com/swatkatz/advisorhub/backend/internal/eventbus"
 )
 
 // scanner implements TemporalScanner.
 type scanner struct {
-	clients  ClientRepository
-	accounts AccountRepository
-	respBen  RESPBeneficiaryRepository
-	contrib  ContributionEngine
-	bus      EventBus
+	clients  client.ClientRepository
+	accounts account.AccountRepository
+	respBen  account.RESPBeneficiaryRepository
+	contrib  contribution.ContributionEngine
+	bus      eventbus.EventBus
 }
 
 // NewScanner creates a new TemporalScanner.
 func NewScanner(
-	clients ClientRepository,
-	accounts AccountRepository,
-	respBen RESPBeneficiaryRepository,
-	contrib ContributionEngine,
-	bus EventBus,
+	clients client.ClientRepository,
+	accounts account.AccountRepository,
+	respBen account.RESPBeneficiaryRepository,
+	contrib contribution.ContributionEngine,
+	bus eventbus.EventBus,
 ) TemporalScanner {
 	return &scanner{
 		clients:  clients,
@@ -78,11 +83,11 @@ func (s *scanner) RunSweep(ctx context.Context, advisorID string, referenceDate 
 // checkAgeApproaching evaluates AGE_APPROACHING rules against clients or RESP beneficiaries.
 // The check finds the year the entity turns targetAge and emits if that year
 // is the current year or its start (Jan 1) is within withinDays of referenceDate.
-func (s *scanner) checkAgeApproaching(ctx context.Context, rule TemporalRule, clients []Client, referenceDate time.Time) (emitted, checked int) {
+func (s *scanner) checkAgeApproaching(ctx context.Context, rule TemporalRule, clients []client.Client, referenceDate time.Time) (emitted, checked int) {
 	targetAge := intParam(rule.Params, "age")
 	withinDays := intParam(rule.Params, "within_days")
 
-	if rule.EntityType == EntityTypeClient {
+	if rule.EntityType == eventbus.EntityTypeClient {
 		for _, c := range clients {
 			checked++
 			if yearTurning, ok := ageApproachingMatch(c.DateOfBirth, targetAge, withinDays, referenceDate); ok {
@@ -94,14 +99,14 @@ func (s *scanner) checkAgeApproaching(ctx context.Context, rule TemporalRule, cl
 					"current_age":  ageOn(c.DateOfBirth, referenceDate),
 					"year_turning": yearTurning,
 				}
-				if err := s.publishEvent(ctx, rule.EventType, c.ID, EntityTypeClient, payload, referenceDate); err != nil {
+				if err := s.publishEvent(ctx, rule.EventType, c.ID, eventbus.EntityTypeClient, payload, referenceDate); err != nil {
 					log.Printf("temporal: error publishing %s for client %s: %v", rule.EventType, c.ID, err)
 				} else {
 					emitted++
 				}
 			}
 		}
-	} else if rule.EntityType == EntityTypeRESPBeneficiary {
+	} else if rule.EntityType == eventbus.EntityTypeRESPBeneficiary {
 		for _, c := range clients {
 			beneficiaries, err := s.respBen.GetRESPBeneficiariesByClientID(ctx, c.ID)
 			if err != nil {
@@ -120,7 +125,7 @@ func (s *scanner) checkAgeApproaching(ctx context.Context, rule TemporalRule, cl
 						"current_age":    ageOn(ben.DateOfBirth, referenceDate),
 						"year_turning":   yearTurning,
 					}
-					if err := s.publishEvent(ctx, rule.EventType, ben.ID, EntityTypeRESPBeneficiary, payload, referenceDate); err != nil {
+					if err := s.publishEvent(ctx, rule.EventType, ben.ID, eventbus.EntityTypeRESPBeneficiary, payload, referenceDate); err != nil {
 						log.Printf("temporal: error publishing %s for beneficiary %s: %v", rule.EventType, ben.ID, err)
 					} else {
 						emitted++
@@ -169,7 +174,7 @@ func ageOn(dob time.Time, date time.Time) int {
 // checkDeadlineWithRoom evaluates DEADLINE_WITH_ROOM rules.
 // Groups accounts by (client_id, account_type) and evaluates once per client.
 // Checks two tax years (current year - 1 and current year) to find approaching deadlines.
-func (s *scanner) checkDeadlineWithRoom(ctx context.Context, rule TemporalRule, clients []Client, referenceDate time.Time) (emitted, checked int) {
+func (s *scanner) checkDeadlineWithRoom(ctx context.Context, rule TemporalRule, clients []client.Client, referenceDate time.Time) (emitted, checked int) {
 	accountType := stringParam(rule.Params, "account_type")
 	withinDays := intParam(rule.Params, "within_days")
 
@@ -185,7 +190,7 @@ func (s *scanner) checkDeadlineWithRoom(ctx context.Context, rule TemporalRule, 
 		// Check if client has any accounts of this type.
 		hasType := false
 		for _, a := range accounts {
-			if a.AccountType == accountType {
+			if string(a.AccountType) == accountType {
 				hasType = true
 				break
 			}
@@ -224,7 +229,7 @@ func (s *scanner) checkDeadlineWithRoom(ctx context.Context, rule TemporalRule, 
 				"room_remaining": room,
 				"tax_year":       taxYear,
 			}
-			if err := s.publishEvent(ctx, rule.EventType, c.ID, EntityTypeClient, payload, referenceDate); err != nil {
+			if err := s.publishEvent(ctx, rule.EventType, c.ID, eventbus.EntityTypeClient, payload, referenceDate); err != nil {
 				log.Printf("temporal: error publishing %s for client %s: %v", rule.EventType, c.ID, err)
 			} else {
 				emitted++
@@ -237,7 +242,7 @@ func (s *scanner) checkDeadlineWithRoom(ctx context.Context, rule TemporalRule, 
 }
 
 // checkDaysSince evaluates DAYS_SINCE rules against clients.
-func (s *scanner) checkDaysSince(ctx context.Context, rule TemporalRule, clients []Client, referenceDate time.Time) (emitted, checked int) {
+func (s *scanner) checkDaysSince(ctx context.Context, rule TemporalRule, clients []client.Client, referenceDate time.Time) (emitted, checked int) {
 	field := stringParam(rule.Params, "field")
 	threshold := intParam(rule.Params, "threshold")
 
@@ -263,7 +268,7 @@ func (s *scanner) checkDaysSince(ctx context.Context, rule TemporalRule, clients
 				"last_meeting_date": fieldDate.Format("2006-01-02"),
 				"days_since":        daysSince,
 			}
-			if err := s.publishEvent(ctx, rule.EventType, c.ID, EntityTypeClient, payload, referenceDate); err != nil {
+			if err := s.publishEvent(ctx, rule.EventType, c.ID, eventbus.EntityTypeClient, payload, referenceDate); err != nil {
 				log.Printf("temporal: error publishing %s for client %s: %v", rule.EventType, c.ID, err)
 			} else {
 				emitted++
@@ -275,7 +280,7 @@ func (s *scanner) checkDaysSince(ctx context.Context, rule TemporalRule, clients
 }
 
 // checkBalanceIdle evaluates BALANCE_IDLE rules against accounts.
-func (s *scanner) checkBalanceIdle(ctx context.Context, rule TemporalRule, clients []Client, referenceDate time.Time) (emitted, checked int) {
+func (s *scanner) checkBalanceIdle(ctx context.Context, rule TemporalRule, clients []client.Client, referenceDate time.Time) (emitted, checked int) {
 	minBalance := float64Param(rule.Params, "min_balance")
 	idleDays := intParam(rule.Params, "idle_days")
 
@@ -302,11 +307,11 @@ func (s *scanner) checkBalanceIdle(ctx context.Context, rule TemporalRule, clien
 				payload := map[string]any{
 					"client_id":    c.ID,
 					"account_id":   a.ID,
-					"account_type": a.AccountType,
+					"account_type": string(a.AccountType),
 					"balance":      a.Balance,
 					"idle_days":    days,
 				}
-				if err := s.publishEvent(ctx, rule.EventType, a.ID, EntityTypeAccount, payload, referenceDate); err != nil {
+				if err := s.publishEvent(ctx, rule.EventType, a.ID, eventbus.EntityTypeAccount, payload, referenceDate); err != nil {
 					log.Printf("temporal: error publishing %s for account %s: %v", rule.EventType, a.ID, err)
 				} else {
 					emitted++
@@ -318,18 +323,18 @@ func (s *scanner) checkBalanceIdle(ctx context.Context, rule TemporalRule, clien
 	return emitted, checked
 }
 
-func (s *scanner) publishEvent(ctx context.Context, eventType, entityID, entityType string, payload any, referenceDate time.Time) error {
+func (s *scanner) publishEvent(ctx context.Context, eventType, entityID string, entityType eventbus.EntityType, payload any, referenceDate time.Time) error {
 	data, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("marshaling event payload: %w", err)
 	}
-	return s.bus.Publish(ctx, EventEnvelope{
+	return s.bus.Publish(ctx, eventbus.EventEnvelope{
 		ID:         fmt.Sprintf("evt_%s_%s_%d", eventType, entityID, referenceDate.UnixNano()),
 		Type:       eventType,
 		EntityID:   entityID,
 		EntityType: entityType,
 		Payload:    data,
-		Source:     "TEMPORAL",
+		Source:     eventbus.SourceTemporal,
 		Timestamp:  referenceDate,
 	})
 }

@@ -4,6 +4,9 @@ import (
 	"context"
 	"fmt"
 	"sync"
+
+	"github.com/swatkatz/advisorhub/backend/internal/account"
+	"github.com/swatkatz/advisorhub/backend/internal/eventbus"
 )
 
 // memoryContributionRepo is an in-memory ContributionRepository for testing.
@@ -81,20 +84,31 @@ func (r *memoryContributionRepo) addLimit(l ClientContributionLimit) {
 	r.limits = append(r.limits, l)
 }
 
-// memoryAccountRepo is an in-memory AccountRepository for testing.
+// memoryAccountRepo is an in-memory account.AccountRepository for testing.
 type memoryAccountRepo struct {
 	mu       sync.RWMutex
-	accounts []Account
+	accounts []account.Account
 }
 
 func newMemoryAccountRepo() *memoryAccountRepo {
 	return &memoryAccountRepo{}
 }
 
-func (r *memoryAccountRepo) GetAccountsByClientID(_ context.Context, clientID string) ([]Account, error) {
+func (r *memoryAccountRepo) GetAccount(_ context.Context, id string) (*account.Account, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	var result []Account
+	for _, a := range r.accounts {
+		if a.ID == id {
+			return &a, nil
+		}
+	}
+	return nil, fmt.Errorf("account %s not found", id)
+}
+
+func (r *memoryAccountRepo) GetAccountsByClientID(_ context.Context, clientID string) ([]account.Account, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	var result []account.Account
 	for _, a := range r.accounts {
 		if a.ClientID == clientID {
 			result = append(result, a)
@@ -115,26 +129,37 @@ func (r *memoryAccountRepo) UpdateFHSALifetimeContributions(_ context.Context, a
 	return fmt.Errorf("account %s not found", accountID)
 }
 
-func (r *memoryAccountRepo) addAccount(a Account) {
+func (r *memoryAccountRepo) addAccount(a account.Account) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.accounts = append(r.accounts, a)
 }
 
-// memoryRESPBeneficiaryRepo is an in-memory RESPBeneficiaryRepository for testing.
+// memoryRESPBeneficiaryRepo is an in-memory account.RESPBeneficiaryRepository for testing.
 type memoryRESPBeneficiaryRepo struct {
 	mu            sync.RWMutex
-	beneficiaries []RESPBeneficiary
+	beneficiaries []account.RESPBeneficiary
 }
 
 func newMemoryRESPBeneficiaryRepo() *memoryRESPBeneficiaryRepo {
 	return &memoryRESPBeneficiaryRepo{}
 }
 
-func (r *memoryRESPBeneficiaryRepo) GetRESPBeneficiariesByClientID(_ context.Context, clientID string) ([]RESPBeneficiary, error) {
+func (r *memoryRESPBeneficiaryRepo) GetRESPBeneficiary(_ context.Context, id string) (*account.RESPBeneficiary, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	var result []RESPBeneficiary
+	for _, b := range r.beneficiaries {
+		if b.ID == id {
+			return &b, nil
+		}
+	}
+	return nil, fmt.Errorf("beneficiary %s not found", id)
+}
+
+func (r *memoryRESPBeneficiaryRepo) GetRESPBeneficiariesByClientID(_ context.Context, clientID string) ([]account.RESPBeneficiary, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	var result []account.RESPBeneficiary
 	for _, b := range r.beneficiaries {
 		if b.ClientID == clientID {
 			result = append(result, b)
@@ -155,7 +180,7 @@ func (r *memoryRESPBeneficiaryRepo) UpdateLifetimeContributions(_ context.Contex
 	return fmt.Errorf("beneficiary %s not found", beneficiaryID)
 }
 
-func (r *memoryRESPBeneficiaryRepo) addBeneficiary(b RESPBeneficiary) {
+func (r *memoryRESPBeneficiaryRepo) addBeneficiary(b account.RESPBeneficiary) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.beneficiaries = append(r.beneficiaries, b)
@@ -164,32 +189,36 @@ func (r *memoryRESPBeneficiaryRepo) addBeneficiary(b RESPBeneficiary) {
 // memoryEventBus captures published events for test assertions.
 type memoryEventBus struct {
 	mu     sync.Mutex
-	events []EventEnvelope
+	events []eventbus.EventEnvelope
 }
 
 func newMemoryEventBus() *memoryEventBus {
 	return &memoryEventBus{}
 }
 
-func (b *memoryEventBus) Publish(_ context.Context, envelope EventEnvelope) error {
+func (b *memoryEventBus) Publish(_ context.Context, envelope eventbus.EventEnvelope) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.events = append(b.events, envelope)
 	return nil
 }
 
-func (b *memoryEventBus) publishedEvents() []EventEnvelope {
+func (b *memoryEventBus) Subscribe(_ string) <-chan eventbus.EventEnvelope {
+	return make(chan eventbus.EventEnvelope)
+}
+
+func (b *memoryEventBus) publishedEvents() []eventbus.EventEnvelope {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	result := make([]EventEnvelope, len(b.events))
+	result := make([]eventbus.EventEnvelope, len(b.events))
 	copy(result, b.events)
 	return result
 }
 
-func (b *memoryEventBus) eventsByType(eventType string) []EventEnvelope {
+func (b *memoryEventBus) eventsByType(eventType string) []eventbus.EventEnvelope {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	var result []EventEnvelope
+	var result []eventbus.EventEnvelope
 	for _, e := range b.events {
 		if e.Type == eventType {
 			result = append(result, e)

@@ -43,7 +43,7 @@ Follow these conventions in every spec:
 - **Data Model indexes**: Always describe indexes for every table. Name them explicitly (e.g., `idx_table_column`). Explain the query path each index supports.
 - **Sorting**: Repositories return data ordered by `id` by default. All user-facing sorting (by name, date, severity, etc.) is the responsibility of the GraphQL resolver layer, not repositories. This is documented in `docs/ARCHITECTURE.md` under "GraphQL Schema > Sorting".
 - **Repository interfaces**: Define Go interface signatures with `context.Context` as first param. Return `(*Entity, error)` for single, `([]Entity, error)` for lists.
-- **Cross-context references**: By ID only. Never import another context's package.
+- **Cross-context references**: By ID only (primitive strings). Contexts may import another context's interfaces and domain types but not implementation types.
 - **Query paths**: Design interfaces around actual query patterns from the frontend/resolvers, not abstract CRUD.
 - **FK references**: Note FK relationships in constraints column but remember the context does not own the referenced entity — it just stores the ID.
 

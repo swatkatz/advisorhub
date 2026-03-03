@@ -2,7 +2,6 @@ package transfer
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"math"
 	"time"
@@ -76,12 +75,6 @@ const (
 	EventTransferStatusChanged = "TransferStatusChanged"
 )
 
-// Event bus constants (local copies to avoid importing eventbus package directly).
-const (
-	SourceReactive     = "REACTIVE"
-	EntityTypeTransfer = "Transfer"
-)
-
 // Transfer represents a money transfer between institutions.
 type Transfer struct {
 	ID                string
@@ -116,22 +109,6 @@ func (t *Transfer) IsStuck(now time.Time) bool {
 type TransferCheckResult struct {
 	TransferID string
 	Signal     CheckSignal
-}
-
-// EventBus is the interface this context needs for publishing events.
-type EventBus interface {
-	Publish(ctx context.Context, envelope EventEnvelope) error
-}
-
-// EventEnvelope is a local representation of the event bus envelope.
-type EventEnvelope struct {
-	ID         string
-	Type       string
-	EntityID   string
-	EntityType string
-	Payload    json.RawMessage
-	Source     string
-	Timestamp  time.Time
 }
 
 // TransferRepository defines data access for transfers.

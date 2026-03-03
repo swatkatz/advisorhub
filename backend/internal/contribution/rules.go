@@ -34,11 +34,6 @@ const (
 	EventContributionProcessed    = "ContributionProcessed"
 )
 
-// Event source.
-const (
-	SourceReactive = "REACTIVE"
-	EntityTypeClient = "Client"
-)
 
 // Deadline computes the contribution deadline for an account type in a given tax year.
 func Deadline(accountType string, taxYear int) *time.Time {

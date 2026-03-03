@@ -7,6 +7,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/swatkatz/advisorhub/backend/internal/eventbus"
 )
 
 // memoryTransferRepo is an in-memory implementation of TransferRepository for tests.
@@ -95,24 +97,28 @@ func (r *memoryTransferRepo) UpdateTransferStatus(_ context.Context, id string, 
 // memoryEventBus captures published events for test assertions.
 type memoryEventBus struct {
 	mu     sync.Mutex
-	events []EventEnvelope
+	events []eventbus.EventEnvelope
 }
 
 func newMemoryEventBus() *memoryEventBus {
 	return &memoryEventBus{}
 }
 
-func (b *memoryEventBus) Publish(_ context.Context, envelope EventEnvelope) error {
+func (b *memoryEventBus) Publish(_ context.Context, envelope eventbus.EventEnvelope) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.events = append(b.events, envelope)
 	return nil
 }
 
-func (b *memoryEventBus) eventsByType(eventType string) []EventEnvelope {
+func (b *memoryEventBus) Subscribe(_ string) <-chan eventbus.EventEnvelope {
+	return make(chan eventbus.EventEnvelope)
+}
+
+func (b *memoryEventBus) eventsByType(eventType string) []eventbus.EventEnvelope {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	var result []EventEnvelope
+	var result []eventbus.EventEnvelope
 	for _, e := range b.events {
 		if e.Type == eventType {
 			result = append(result, e)
@@ -121,10 +127,10 @@ func (b *memoryEventBus) eventsByType(eventType string) []EventEnvelope {
 	return result
 }
 
-func (b *memoryEventBus) allEvents() []EventEnvelope {
+func (b *memoryEventBus) allEvents() []eventbus.EventEnvelope {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	result := make([]EventEnvelope, len(b.events))
+	result := make([]eventbus.EventEnvelope, len(b.events))
 	copy(result, b.events)
 	return result
 }

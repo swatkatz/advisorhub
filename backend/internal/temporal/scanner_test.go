@@ -6,6 +6,10 @@ import (
 	"errors"
 	"testing"
 	"time"
+
+	"github.com/swatkatz/advisorhub/backend/internal/account"
+	"github.com/swatkatz/advisorhub/backend/internal/client"
+	"github.com/swatkatz/advisorhub/backend/internal/eventbus"
 )
 
 // Test anchor 2: Client born 1955-11-08, referenceDate 2026-03-02,
@@ -67,7 +71,7 @@ func TestAgeApproaching_Client(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			bus := newMockEventBus()
 			clients := newMockClientRepo()
-			clients.AddClient("advisor1", Client{
+			clients.AddClient("advisor1", client.Client{
 				ID:          "c1",
 				Name:        tt.clientName,
 				DateOfBirth: tt.dob,
@@ -88,14 +92,14 @@ func TestAgeApproaching_Client(t *testing.T) {
 				}
 
 				evt := events[0]
-				if evt.EntityType != EntityTypeClient {
-					t.Errorf("EntityType = %q, want %q", evt.EntityType, EntityTypeClient)
+				if evt.EntityType != eventbus.EntityTypeClient {
+					t.Errorf("EntityType = %q, want %q", evt.EntityType, eventbus.EntityTypeClient)
 				}
 				if evt.EntityID != "c1" {
 					t.Errorf("EntityID = %q, want %q", evt.EntityID, "c1")
 				}
-				if evt.Source != "TEMPORAL" {
-					t.Errorf("Source = %q, want TEMPORAL", evt.Source)
+				if evt.Source != eventbus.SourceTemporal {
+					t.Errorf("Source = %q, want %q", evt.Source, eventbus.SourceTemporal)
 				}
 
 				var payload map[string]any
@@ -161,13 +165,13 @@ func TestAgeApproaching_RESPBeneficiary(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			bus := newMockEventBus()
 			clients := newMockClientRepo()
-			clients.AddClient("advisor1", Client{
+			clients.AddClient("advisor1", client.Client{
 				ID:   "c1",
 				Name: "Parent Client",
 			})
 
 			respBen := newMockRESPBenRepo()
-			respBen.AddBeneficiary(RESPBeneficiary{
+			respBen.AddBeneficiary(account.RESPBeneficiary{
 				ID:          "resp_ben_1",
 				ClientID:    "c1",
 				Name:        tt.benName,
@@ -184,9 +188,9 @@ func TestAgeApproaching_RESPBeneficiary(t *testing.T) {
 
 			if tt.wantEmit {
 				// Filter for RESP beneficiary events (EntityType = RESPBeneficiary)
-				var benEvents []EventEnvelope
+				var benEvents []eventbus.EventEnvelope
 				for _, e := range events {
-					if e.EntityType == EntityTypeRESPBeneficiary {
+					if e.EntityType == eventbus.EntityTypeRESPBeneficiary {
 						benEvents = append(benEvents, e)
 					}
 				}
@@ -213,9 +217,9 @@ func TestAgeApproaching_RESPBeneficiary(t *testing.T) {
 					t.Errorf("beneficiary_id = %v, want resp_ben_1", payload["beneficiary_id"])
 				}
 			} else {
-				var benEvents []EventEnvelope
+				var benEvents []eventbus.EventEnvelope
 				for _, e := range events {
-					if e.EntityType == EntityTypeRESPBeneficiary {
+					if e.EntityType == eventbus.EntityTypeRESPBeneficiary {
 						benEvents = append(benEvents, e)
 					}
 				}
@@ -237,7 +241,7 @@ func TestDeadlineWithRoom(t *testing.T) {
 	tests := []struct {
 		name          string
 		referenceDate time.Time
-		accounts      []Account
+		accounts      []account.Account
 		room          float64
 		roomErr       error
 		wantEmit      bool
@@ -247,7 +251,7 @@ func TestDeadlineWithRoom(t *testing.T) {
 		{
 			name:          "within 30 days, room available",
 			referenceDate: time.Date(2026, 2, 19, 0, 0, 0, 0, time.UTC),
-			accounts: []Account{
+			accounts: []account.Account{
 				{ID: "acc1", ClientID: "c1", AccountType: AccountTypeRRSP, Balance: 50000},
 			},
 			room:          8200,
@@ -258,7 +262,7 @@ func TestDeadlineWithRoom(t *testing.T) {
 		{
 			name:          "within 30 days, no room (fully contributed)",
 			referenceDate: time.Date(2026, 2, 19, 0, 0, 0, 0, time.UTC),
-			accounts: []Account{
+			accounts: []account.Account{
 				{ID: "acc1", ClientID: "c1", AccountType: AccountTypeRRSP, Balance: 50000},
 			},
 			room:     0,
@@ -267,7 +271,7 @@ func TestDeadlineWithRoom(t *testing.T) {
 		{
 			name:          "outside 30-day window",
 			referenceDate: time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC),
-			accounts: []Account{
+			accounts: []account.Account{
 				{ID: "acc1", ClientID: "c1", AccountType: AccountTypeRRSP, Balance: 50000},
 			},
 			room:     5000,
@@ -276,7 +280,7 @@ func TestDeadlineWithRoom(t *testing.T) {
 		{
 			name:          "two RRSP accounts same client, emits once per client",
 			referenceDate: time.Date(2026, 2, 19, 0, 0, 0, 0, time.UTC),
-			accounts: []Account{
+			accounts: []account.Account{
 				{ID: "acc1", ClientID: "c1", AccountType: AccountTypeRRSP, Institution: "WS", Balance: 30000},
 				{ID: "acc2", ClientID: "c1", AccountType: AccountTypeRRSP, Institution: "RBC", Balance: 20000},
 			},
@@ -291,7 +295,7 @@ func TestDeadlineWithRoom(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			bus := newMockEventBus()
 			clients := newMockClientRepo()
-			clients.AddClient("advisor1", Client{ID: "c1", Name: "Test Client"})
+			clients.AddClient("advisor1", client.Client{ID: "c1", Name: "Test Client"})
 
 			acctRepo := newMockAccountRepo()
 			for _, a := range tt.accounts {
@@ -315,7 +319,7 @@ func TestDeadlineWithRoom(t *testing.T) {
 
 			if tt.wantEmit {
 				// Filter for RRSP deadline events
-				var rrspEvents []EventEnvelope
+				var rrspEvents []eventbus.EventEnvelope
 				for _, e := range events {
 					var p map[string]any
 					json.Unmarshal(e.Payload, &p)
@@ -339,7 +343,7 @@ func TestDeadlineWithRoom(t *testing.T) {
 					t.Errorf("room_remaining = %v, want %v", payload["room_remaining"], tt.wantRoom)
 				}
 			} else {
-				var rrspEvents []EventEnvelope
+				var rrspEvents []eventbus.EventEnvelope
 				for _, e := range events {
 					var p map[string]any
 					json.Unmarshal(e.Payload, &p)
@@ -392,7 +396,7 @@ func TestDaysSince(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			bus := newMockEventBus()
 			clients := newMockClientRepo()
-			clients.AddClient("advisor1", Client{
+			clients.AddClient("advisor1", client.Client{
 				ID:              "c5",
 				Name:            "Elena Vasquez",
 				LastMeetingDate: tt.lastMeetingDate,
@@ -411,8 +415,8 @@ func TestDaysSince(t *testing.T) {
 					t.Fatal("expected EngagementStale event but none emitted")
 				}
 				evt := events[0]
-				if evt.EntityType != EntityTypeClient {
-					t.Errorf("EntityType = %q, want %q", evt.EntityType, EntityTypeClient)
+				if evt.EntityType != eventbus.EntityTypeClient {
+					t.Errorf("EntityType = %q, want %q", evt.EntityType, eventbus.EntityTypeClient)
 				}
 
 				var payload map[string]any
@@ -435,14 +439,14 @@ func TestDaysSince(t *testing.T) {
 func TestBalanceIdle(t *testing.T) {
 	tests := []struct {
 		name          string
-		account       Account
+		account       account.Account
 		referenceDate time.Time
 		wantEmit      bool
 		wantIdleDays  int
 	}{
 		{
 			name: "internal, high balance, idle 34 days",
-			account: Account{
+			account: account.Account{
 				ID:               "acc1",
 				ClientID:         "c4",
 				AccountType:      "NON_REG",
@@ -456,7 +460,7 @@ func TestBalanceIdle(t *testing.T) {
 		},
 		{
 			name: "external account skipped regardless of balance and idle time",
-			account: Account{
+			account: account.Account{
 				ID:               "acc2",
 				ClientID:         "c4",
 				AccountType:      "NON_REG",
@@ -469,7 +473,7 @@ func TestBalanceIdle(t *testing.T) {
 		},
 		{
 			name: "internal, balance below threshold",
-			account: Account{
+			account: account.Account{
 				ID:               "acc3",
 				ClientID:         "c4",
 				AccountType:      "NON_REG",
@@ -482,7 +486,7 @@ func TestBalanceIdle(t *testing.T) {
 		},
 		{
 			name: "internal, high balance, recent activity (not idle enough)",
-			account: Account{
+			account: account.Account{
 				ID:               "acc4",
 				ClientID:         "c4",
 				AccountType:      "NON_REG",
@@ -499,7 +503,7 @@ func TestBalanceIdle(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			bus := newMockEventBus()
 			clients := newMockClientRepo()
-			clients.AddClient("advisor1", Client{ID: "c4", Name: "Rohan Gupta"})
+			clients.AddClient("advisor1", client.Client{ID: "c4", Name: "Rohan Gupta"})
 
 			acctRepo := newMockAccountRepo()
 			acctRepo.AddAccount(tt.account)
@@ -517,8 +521,8 @@ func TestBalanceIdle(t *testing.T) {
 					t.Fatal("expected CashUninvested event but none emitted")
 				}
 				evt := events[0]
-				if evt.EntityType != EntityTypeAccount {
-					t.Errorf("EntityType = %q, want %q", evt.EntityType, EntityTypeAccount)
+				if evt.EntityType != eventbus.EntityTypeAccount {
+					t.Errorf("EntityType = %q, want %q", evt.EntityType, eventbus.EntityTypeAccount)
 				}
 				if evt.EntityID != tt.account.ID {
 					t.Errorf("EntityID = %q, want %q", evt.EntityID, tt.account.ID)
@@ -542,7 +546,7 @@ func TestBalanceIdle(t *testing.T) {
 func TestRunSweep_AllRulesEvaluated(t *testing.T) {
 	bus := newMockEventBus()
 	clients := newMockClientRepo()
-	clients.AddClient("advisor1", Client{
+	clients.AddClient("advisor1", client.Client{
 		ID:              "c1",
 		Name:            "Test Client",
 		DateOfBirth:     time.Date(1990, 1, 1, 0, 0, 0, 0, time.UTC),
@@ -565,12 +569,12 @@ func TestRunSweep_AllRulesEvaluated(t *testing.T) {
 func TestRunSweep_ErrorContinues(t *testing.T) {
 	bus := newMockEventBus()
 	clients := newMockClientRepo()
-	clients.AddClient("advisor1", Client{ID: "c1", Name: "Client One"})
-	clients.AddClient("advisor1", Client{ID: "c2", Name: "Client Two"})
+	clients.AddClient("advisor1", client.Client{ID: "c1", Name: "Client One"})
+	clients.AddClient("advisor1", client.Client{ID: "c2", Name: "Client Two"})
 
 	acctRepo := newMockAccountRepo()
-	acctRepo.AddAccount(Account{ID: "acc1", ClientID: "c1", AccountType: AccountTypeRRSP, Balance: 50000})
-	acctRepo.AddAccount(Account{ID: "acc2", ClientID: "c2", AccountType: AccountTypeRRSP, Balance: 50000})
+	acctRepo.AddAccount(account.Account{ID: "acc1", ClientID: "c1", AccountType: AccountTypeRRSP, Balance: 50000})
+	acctRepo.AddAccount(account.Account{ID: "acc2", ClientID: "c2", AccountType: AccountTypeRRSP, Balance: 50000})
 
 	contrib := newMockContribEngine()
 	refDate := time.Date(2026, 2, 19, 0, 0, 0, 0, time.UTC)
@@ -586,7 +590,7 @@ func TestRunSweep_ErrorContinues(t *testing.T) {
 
 	// c1 should be skipped (error), c2 should emit
 	events := bus.EventsByType(EventDeadlineApproaching)
-	var rrspEvents []EventEnvelope
+	var rrspEvents []eventbus.EventEnvelope
 	for _, e := range events {
 		var p map[string]any
 		json.Unmarshal(e.Payload, &p)
