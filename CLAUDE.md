@@ -172,6 +172,7 @@ Run both after any schema change. The graphql-api context owns the schema; other
 - transfer-monitor (Transfer, TransferStatus, stage thresholds, stuck detection) — `specs/05-transfer-monitor.md`
 - temporal-scanner (TemporalRule, check functions, sweep) — `specs/06-temporal-scanner.md`
 - seed-data (seed loader, pre-computed events) — `specs/10-seed-data.md`
+- graphql-api (resolvers, SSE subscriptions, Railway deployment) — `specs/09-graphql-api.md`
 
 ### Specs written
 
@@ -179,7 +180,6 @@ Run both after any schema change. The graphql-api context owns the schema; other
 - account (Account, AccountType, RESPBeneficiary) — `specs/02-account.md`
 - transfer-monitor (Transfer, TransferStatus, stage thresholds, stuck detection) — `specs/05-transfer-monitor.md`
 - action-item-service (ActionItem, ActionItemStatus, CRUD, status transitions) — `specs/08-action-item-service.md`
-- graphql-api (resolvers, SSE subscriptions, Railway deployment) — `specs/09-graphql-api.md`
 - frontend (React dashboard, Apollo Client, graphql-codegen) — `specs/11-frontend.md`
 
 ### Specs not started
