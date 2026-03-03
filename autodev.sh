@@ -63,6 +63,10 @@ Build started: $build_start
 |---------|------|----------|-------|--------|--------|
 EOF
 
+# Commit ledger header to main so it doesn't leak into feature branches
+git add "$LEDGER"
+git commit -m "docs: initialize work ledger"
+
 echo ""
 echo "Build started: $build_start"
 echo ""
@@ -239,6 +243,11 @@ EOF
 
   echo "| $name | $risk | ${duration}m | $test_count | $review_status | DONE |" >> "$LEDGER"
 
+  # Commit ledger update to main so it's not lost
+  git add "$LEDGER"
+  git commit -m "docs: update work ledger — $name complete"
+  git push origin "$BASE_BRANCH"
+
   echo ""
   echo "Completed: $name (${duration}m)"
   echo ""
@@ -255,6 +264,11 @@ Total contexts: $context_count
 Human reviews: $human_reviews
 Auto-approved: $auto_approved
 EOF
+
+# Commit final ledger summary to main
+git add "$LEDGER"
+git commit -m "docs: finalize work ledger"
+git push origin "$BASE_BRANCH"
 
 echo "═══════════════════════════════════════"
 echo "  Build complete!"
