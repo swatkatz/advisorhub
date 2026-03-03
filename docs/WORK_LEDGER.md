@@ -12,3 +12,4 @@ Build started: 2026-03-03T00:49:11Z
 | action-item-service | LOW | 4m | 23 | Auto | DONE |
 | contribution-engine | HIGH | 8m | 17 | Human-reviewed | DONE |
 | transfer-monitor | HIGH | 9m | 21 | Human-reviewed | DONE |
+| temporal-scanner | HIGH | 17m | 7 | Human-reviewed | DONE |
