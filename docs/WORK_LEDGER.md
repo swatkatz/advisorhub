@@ -13,3 +13,10 @@ Build started: 2026-03-03T00:49:11Z
 | contribution-engine | HIGH | 8m | 17 | Human-reviewed | DONE |
 | transfer-monitor | HIGH | 9m | 21 | Human-reviewed | DONE |
 | temporal-scanner | HIGH | 17m | 7 | Human-reviewed | DONE |
+| client | LOW | — | — | — | SKIPPED (already merged) |
+| account | LOW | — | — | — | SKIPPED (already merged) |
+| event-bus | MEDIUM | — | — | — | SKIPPED (already merged) |
+| action-item-service | LOW | — | — | — | SKIPPED (already merged) |
+| contribution-engine | HIGH | — | — | — | SKIPPED (already merged) |
+| transfer-monitor | HIGH | — | — | — | SKIPPED (already merged) |
+| temporal-scanner | HIGH | — | — | — | SKIPPED (already merged) |

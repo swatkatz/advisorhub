@@ -167,6 +167,7 @@ Run both after any schema change. The graphql-api context owns the schema; other
 ### In progress
 
 - action-item-service (ActionItem, ActionItemStatus, CRUD, status transitions) — `specs/08-action-item-service.md`
+- alert (Alert, AlertCategoryRule, dedup, state machine, cascade close, LLM enhancement) — `specs/07-alert.md`
 - contribution-engine (Contribution, ContributionRule, room calc, over-contribution, CESG gap) — `specs/04-contribution-engine.md`
 - transfer-monitor (Transfer, TransferStatus, stage thresholds, stuck detection) — `specs/05-transfer-monitor.md`
 - temporal-scanner (TemporalRule, check functions, sweep) — `specs/06-temporal-scanner.md`
@@ -176,7 +177,6 @@ Run both after any schema change. The graphql-api context owns the schema; other
 - client (Client, Household, Advisor, AdvisorNote, Goal) — `specs/01-client.md`
 - account (Account, AccountType, RESPBeneficiary) — `specs/02-account.md`
 - transfer-monitor (Transfer, TransferStatus, stage thresholds, stuck detection) — `specs/05-transfer-monitor.md`
-- alert (Alert, AlertCategoryRule, dedup, state machine, cascade close, LLM enhancement) — `specs/07-alert.md`
 - action-item-service (ActionItem, ActionItemStatus, CRUD, status transitions) — `specs/08-action-item-service.md`
 - graphql-api (resolvers, SSE subscriptions, Railway deployment) — `specs/09-graphql-api.md`
 - seed-data (seed loader, pre-computed events) — `specs/10-seed-data.md`
