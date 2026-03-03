@@ -66,7 +66,7 @@ export default function App() {
 
   const advisor = advisorData?.advisor
   const unresolvedCount = (alertsData?.alerts ?? []).filter(
-    (a) => a.status !== 'CLOSED',
+    (a) => a.status !== 'CLOSED' && a.status !== 'SNOOZED',
   ).length
 
   return (
