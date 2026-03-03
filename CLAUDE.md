@@ -161,6 +161,7 @@ Run both after any schema change. The graphql-api context owns the schema; other
 ### Built and merged
 
 - client (Client, Household, Advisor, AdvisorNote, Goal) — `specs/01-client.md`
+- account (Account, AccountType, RESPBeneficiary) — `specs/02-account.md`
 
 ### In progress
 
