@@ -104,7 +104,13 @@ If your context does NOT touch the schema, skip this.
 
 ## When you're done
 
+### Go contexts
 1. **Run all tests** for your context: `go test ./backend/internal/{context}/...`
 2. **Run go vet**: `go vet ./backend/internal/{context}/...`
 3. **Update `CLAUDE.md`**: Move the context from "Specs written" to "In progress" or "Built and merged".
 4. **Stop.** The caller handles git operations from here.
+
+### Node contexts
+1. **Run build**: `cd frontend && npm run build`
+2. **Update `CLAUDE.md`**: Move the context from "Specs written" to "In progress" or "Built and merged".
+3. **Stop.** The caller handles git operations from here.
