@@ -166,7 +166,7 @@ Run both after any schema change. The graphql-api context owns the schema; other
 
 ### In progress
 
-- (none yet)
+- action-item-service (ActionItem, ActionItemStatus, CRUD, status transitions) — `specs/08-action-item-service.md`
 
 ### Specs written
 
