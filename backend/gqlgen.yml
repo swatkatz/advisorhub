@@ -28,7 +28,47 @@ models:
       - github.com/99designs/gqlgen/graphql.Int32
   DateTime:
     model:
-      - github.com/99designs/gqlgen/graphql.Time
+      - github.com/swatkatz/advisorhub/backend/internal/graph.DateTime
   Date:
     model:
-      - github.com/99designs/gqlgen/graphql.Time
+      - github.com/swatkatz/advisorhub/backend/internal/graph.Date
+  Client:
+    fields:
+      household:
+        resolver: true
+      accounts:
+        resolver: true
+      externalAccounts:
+        resolver: true
+      aum:
+        resolver: true
+      health:
+        resolver: true
+      alerts:
+        resolver: true
+      actionItems:
+        resolver: true
+      goals:
+        resolver: true
+      notes:
+        resolver: true
+  Household:
+    fields:
+      members:
+        resolver: true
+  Alert:
+    fields:
+      client:
+        resolver: true
+      linkedActionItems:
+        resolver: true
+  ActionItem:
+    fields:
+      client:
+        resolver: true
+      alert:
+        resolver: true
+  Transfer:
+    fields:
+      client:
+        resolver: true
