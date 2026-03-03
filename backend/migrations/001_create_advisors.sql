@@ -1,0 +1,6 @@
+CREATE TABLE IF NOT EXISTS advisors (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    email TEXT NOT NULL UNIQUE,
+    role TEXT NOT NULL
+);
