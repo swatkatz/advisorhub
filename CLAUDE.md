@@ -162,6 +162,7 @@ Run both after any schema change. The graphql-api context owns the schema; other
 
 - client (Client, Household, Advisor, AdvisorNote, Goal) — `specs/01-client.md`
 - account (Account, AccountType, RESPBeneficiary) — `specs/02-account.md`
+- event-bus (EventEnvelope, EventSource, EntityType, pub/sub) — `specs/03-event-bus.md`
 
 ### In progress
 
@@ -171,7 +172,6 @@ Run both after any schema change. The graphql-api context owns the schema; other
 
 - client (Client, Household, Advisor, AdvisorNote, Goal) — `specs/01-client.md`
 - account (Account, AccountType, RESPBeneficiary) — `specs/02-account.md`
-- event-bus (EventEnvelope, EventSource, EntityType, pub/sub) — `specs/03-event-bus.md`
 - contribution-engine (Contribution, ContributionRule, room calc, CESG) — `specs/04-contribution-engine.md`
 - transfer-monitor (Transfer, TransferStatus, stage thresholds, stuck detection) — `specs/05-transfer-monitor.md`
 - temporal-scanner (TemporalRule, check functions, sweep) — `specs/06-temporal-scanner.md`
