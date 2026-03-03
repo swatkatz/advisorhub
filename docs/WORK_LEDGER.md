@@ -32,3 +32,4 @@ Build started: 2026-03-03T00:49:11Z
 | seed-data | LOW | 7m | 0
 0 | Auto | DONE |
 | graphql-api | MEDIUM | 17m | 47 | Skimmed | DONE |
+| frontend | LOW | 9m | build-ok | Auto | DONE |
