@@ -220,21 +220,20 @@ EOF
     auto_approved=$((auto_approved + 1))
   fi
 
-  # --- Run migrations if any were added ---
-
-  migration_files=$(git diff "$BASE_BRANCH"..."$branch_name" --name-only -- backend/migrations/*.sql 2>/dev/null)
-  if [ -n "$migration_files" ]; then
-    echo "Running migrations against Railway Postgres..."
-    cat backend/migrations/*.sql | railway connect Postgres
-    echo "Migrations applied."
-  else
-    echo "No new migrations for $name, skipping."
-  fi
-
   # --- Return to base branch ---
 
   git checkout "$BASE_BRANCH"
   git pull origin "$BASE_BRANCH"
+
+  # --- Run migrations if any exist ---
+
+  if ls backend/migrations/*.sql 1>/dev/null 2>&1; then
+    echo "Running all migrations against Railway Postgres..."
+    cat backend/migrations/*.sql | railway connect Postgres
+    echo "Migrations applied."
+  else
+    echo "No migrations found, skipping."
+  fi
 
   # --- Log to ledger ---
 
