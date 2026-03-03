@@ -129,11 +129,21 @@ func (e *ClaudeEnhancer) callClaude(ctx context.Context, prompt string) (summary
 		return "", "", fmt.Errorf("empty API response")
 	}
 
+	// Strip markdown code fences (```json ... ```) that Claude may wrap around the response.
+	text := strings.TrimSpace(apiResp.Content[0].Text)
+	if strings.HasPrefix(text, "```") {
+		if idx := strings.Index(text, "\n"); idx != -1 {
+			text = text[idx+1:]
+		}
+		text = strings.TrimSuffix(strings.TrimSpace(text), "```")
+		text = strings.TrimSpace(text)
+	}
+
 	var result struct {
 		Summary      string `json:"summary"`
 		DraftMessage string `json:"draft_message"`
 	}
-	if err := json.Unmarshal([]byte(apiResp.Content[0].Text), &result); err != nil {
+	if err := json.Unmarshal([]byte(text), &result); err != nil {
 		// Fallback: use the raw text as summary
 		return apiResp.Content[0].Text, "", nil
 	}
