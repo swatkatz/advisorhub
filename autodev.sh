@@ -54,7 +54,8 @@ fi
 
 build_start=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
-cat > "$LEDGER" << EOF
+if [ ! -f "$LEDGER" ]; then
+  cat > "$LEDGER" << EOF
 # Work Ledger — AdvisorHub Build
 
 Build started: $build_start
@@ -63,9 +64,10 @@ Build started: $build_start
 |---------|------|----------|-------|--------|--------|
 EOF
 
-# Commit ledger header to main so it doesn't leak into feature branches
-git add "$LEDGER"
-git commit -m "docs: initialize work ledger"
+  # Commit ledger header to main so it doesn't leak into feature branches
+  git add "$LEDGER"
+  git commit -m "docs: initialize work ledger"
+fi
 
 echo ""
 echo "Build started: $build_start"
@@ -95,77 +97,90 @@ for i in $(seq 0 $((context_count - 1))); do
   start_time=$(date +%s)
   branch_name="feat/$name"
 
-  # --- Create branch ---
+  # --- Check for existing PR ---
 
-  git checkout -b "$branch_name" "$BASE_BRANCH" 2>/dev/null || {
-    echo "Branch $branch_name already exists. Checking out..."
-    git checkout "$branch_name"
-  }
-
-  # --- Dispatch Claude Code (inner loop) ---
-
-  echo ""
-  echo "Dispatching Claude Code for $name..."
-  echo ""
-
-  claude --dangerously-skip-permissions -p "/implement-spec $name" 2>&1 | tee "/tmp/autodev-$name.log"
-
-  # --- Run tests ---
-
-  echo ""
-  echo "Running tests for $name..."
-  echo ""
-
-  if [ "$ctx_type" = "node" ]; then
-    # Frontend: build to verify, then run tests if they exist
-    test_output=$(cd frontend && npm run build 2>&1) || {
-      echo "BUILD FAILED for $name"
-      echo "$test_output"
-      echo "| $name | $risk | — | FAIL | — | FAILED |" >> "$LEDGER"
-      git checkout "$BASE_BRANCH"
-      echo ""
-      echo "Stopping build. Fix $name and re-run."
-      exit 1
-    }
-    echo "Build succeeded."
-    test_count="build-ok"
-  else
-    # Go: run unit tests (go.mod is in backend/)
-    pkg_dir="$pkg"
-    test_output=$(cd backend && go test ./internal/"$pkg_dir"/... -v -count=1 2>&1) || {
-      echo "TESTS FAILED for $name"
-      echo "$test_output"
-      echo "| $name | $risk | — | FAIL | — | FAILED |" >> "$LEDGER"
-      git checkout "$BASE_BRANCH"
-      echo ""
-      echo "Stopping build. Fix $name and re-run."
-      exit 1
-    }
-
-    # Count tests from output
-    test_count=$(echo "$test_output" | grep -c "^--- PASS" || echo "0")
-    echo "Tests passed: $test_count"
+  merged_count=$(gh pr list --head "$branch_name" --state merged --json number --jq 'length' 2>/dev/null || echo "0")
+  if [ "$merged_count" -gt 0 ]; then
+    echo "Already merged — skipping $name"
+    echo "| $name | $risk | — | — | — | SKIPPED (already merged) |" >> "$LEDGER"
+    continue
   fi
 
-  # --- Commit ---
+  open_pr=$(gh pr list --head "$branch_name" --state open --json url --jq '.[0].url' 2>/dev/null || echo "")
+  if [ -n "$open_pr" ]; then
+    # --- Resume from open PR ---
+    echo "Open PR found — resuming from review gate: $open_pr"
+    pr_url="$open_pr"
+    test_count="(resumed)"
+  else
+    # --- Full pipeline: branch → Claude → test → commit → push → PR ---
 
-  git add -A
-  git commit -m "$(cat <<EOF
+    # Create branch
+    git checkout -b "$branch_name" "$BASE_BRANCH" 2>/dev/null || {
+      echo "Branch $branch_name already exists. Checking out..."
+      git checkout "$branch_name"
+    }
+
+    # Dispatch Claude Code (inner loop)
+    echo ""
+    echo "Dispatching Claude Code for $name..."
+    echo ""
+
+    claude --dangerously-skip-permissions -p "/implement-spec $name" 2>&1 | tee "/tmp/autodev-$name.log"
+
+    # Run tests
+    echo ""
+    echo "Running tests for $name..."
+    echo ""
+
+    if [ "$ctx_type" = "node" ]; then
+      # Frontend: build to verify, then run tests if they exist
+      test_output=$(cd frontend && npm run build 2>&1) || {
+        echo "BUILD FAILED for $name"
+        echo "$test_output"
+        echo "| $name | $risk | — | FAIL | — | FAILED |" >> "$LEDGER"
+        git checkout "$BASE_BRANCH"
+        echo ""
+        echo "Stopping build. Fix $name and re-run."
+        exit 1
+      }
+      echo "Build succeeded."
+      test_count="build-ok"
+    else
+      # Go: run unit tests (go.mod is in backend/)
+      pkg_dir="$pkg"
+      test_output=$(cd backend && go test ./internal/"$pkg_dir"/... -v -count=1 2>&1) || {
+        echo "TESTS FAILED for $name"
+        echo "$test_output"
+        echo "| $name | $risk | — | FAIL | — | FAILED |" >> "$LEDGER"
+        git checkout "$BASE_BRANCH"
+        echo ""
+        echo "Stopping build. Fix $name and re-run."
+        exit 1
+      }
+
+      # Count tests from output
+      test_count=$(echo "$test_output" | grep -c "^--- PASS" || echo "0")
+      echo "Tests passed: $test_count"
+    fi
+
+    # Commit
+    git add -A
+    git commit -m "$(cat <<EOF
 feat($name): implement $name bounded context [risk:$risk]
 
 $description
 
 Co-Authored-By: Claude Code <noreply@anthropic.com>
 EOF
-  )"
+    )"
 
-  # --- Push + PR ---
+    # Push + PR
+    git push -u origin "$branch_name"
 
-  git push -u origin "$branch_name"
-
-  pr_url=$(gh pr create \
-    --title "feat($name): implement $name [risk:$risk]" \
-    --body "$(cat <<EOF
+    pr_url=$(gh pr create \
+      --title "feat($name): implement $name [risk:$risk]" \
+      --body "$(cat <<EOF
 ## Summary
 
 Implements the **$name** bounded context.
@@ -193,9 +208,13 @@ fi)
 
 Generated by autodev.sh
 EOF
-  )" 2>&1)
+    )" 2>&1)
 
-  echo "PR created: $pr_url"
+    echo "PR created: $pr_url"
+
+    # Return to base branch before gate
+    git checkout "$BASE_BRANCH"
+  fi
 
   # --- Risk-tier gate ---
 
@@ -213,8 +232,9 @@ EOF
     human_reviews=$((human_reviews + 1))
     echo ""
     echo "MEDIUM RISK — Skim PR: $pr_url"
-    echo "Press enter to continue, or Ctrl+C to abort."
+    echo "Press enter to merge, or Ctrl+C to abort."
     read -r
+    gh pr merge "$pr_url" --merge --delete-branch
     review_status="Skimmed"
   else
     # LOW risk: auto-merge
