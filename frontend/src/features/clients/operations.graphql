@@ -1,0 +1,136 @@
+query GetAdvisor($id: ID!) {
+  advisor(id: $id) {
+    id
+    name
+    email
+    role
+  }
+}
+
+query GetClients($advisorId: ID!) {
+  clients(advisorId: $advisorId) {
+    id
+    name
+    email
+    dateOfBirth
+    aum
+    lastMeeting
+    health
+    accounts {
+      id
+      accountType
+    }
+    alerts {
+      id
+    }
+  }
+}
+
+query GetClient($id: ID!) {
+  client(id: $id) {
+    id
+    name
+    email
+    dateOfBirth
+    aum
+    lastMeeting
+    health
+    household {
+      id
+      name
+      members {
+        id
+        name
+      }
+    }
+    accounts {
+      id
+      accountType
+      institution
+      balance
+      isExternal
+    }
+    externalAccounts {
+      id
+      accountType
+      institution
+      balance
+      isExternal
+    }
+    alerts {
+      id
+      severity
+      category
+      summary
+      status
+    }
+    actionItems {
+      id
+      text
+      status
+      dueDate
+      createdAt
+      resolvedAt
+      resolutionNote
+    }
+    goals {
+      id
+      name
+      targetAmount
+      targetDate
+      progressPct
+      status
+    }
+    notes {
+      id
+      date
+      text
+    }
+  }
+}
+
+query GetContributionSummary($clientId: ID!, $taxYear: Int!) {
+  contributionSummary(clientId: $clientId, taxYear: $taxYear) {
+    clientId
+    taxYear
+    accounts {
+      accountType
+      annualLimit
+      lifetimeCap
+      contributed
+      remaining
+      isOverContributed
+      overAmount
+      penaltyPerMonth
+      deadline
+      daysUntilDeadline
+    }
+  }
+}
+
+query GetActionItems($clientId: ID) {
+  actionItems(clientId: $clientId) {
+    id
+    client {
+      id
+      name
+    }
+    alert {
+      id
+    }
+    text
+    status
+    dueDate
+    createdAt
+    resolvedAt
+    resolutionNote
+  }
+}
+
+mutation AddNote($clientId: ID!, $text: String!) {
+  addNote(clientId: $clientId, text: $text) {
+    id
+    date
+    text
+  }
+}
