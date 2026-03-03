@@ -44,7 +44,8 @@ export function AlertFeed() {
 
   const filterInput = buildFilter(filter)
   const { data, loading, error, refetch } = useGetAlertsQuery({
-    variables: { advisorId: 'adv1', filter: filterInput },
+    variables: { advisorId: 'adv1', filter: filterInput ?? null },
+    fetchPolicy: 'cache-and-network',
   })
 
   const [runSweep, { loading: sweepLoading }] = useRunMorningSweepMutation()
@@ -164,12 +165,12 @@ export function AlertFeed() {
       </div>
 
       <div style={{ flex: 1, overflow: 'auto', padding: '0 20px 20px' }}>
-        {loading && (
+        {loading && !data && (
           <div style={{ padding: 40, textAlign: 'center', color: colors.textDim, fontSize: 13 }}>
             Loading alerts...
           </div>
         )}
-        {error && (
+        {error && !data && (
           <div style={{ padding: 20, color: colors.red, fontSize: 13 }}>
             Error loading alerts: {error.message}
           </div>
