@@ -1,0 +1,4 @@
+CREATE TABLE IF NOT EXISTS households (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL
+);
