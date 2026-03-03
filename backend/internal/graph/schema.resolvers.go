@@ -7,171 +7,752 @@ package graph
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"log"
+	"sort"
 	"time"
 
+	"github.com/swatkatz/advisorhub/backend/internal/account"
+	"github.com/swatkatz/advisorhub/backend/internal/actionitem"
+	"github.com/swatkatz/advisorhub/backend/internal/alert"
+	"github.com/swatkatz/advisorhub/backend/internal/client"
 	"github.com/swatkatz/advisorhub/backend/internal/graph/model"
+	"github.com/swatkatz/advisorhub/backend/internal/transfer"
 )
+
+// --- Sorting rank maps ---
+
+var severityRank = map[string]int{
+	"CRITICAL": 0,
+	"URGENT":   1,
+	"ADVISORY": 2,
+	"INFO":     3,
+}
+
+var healthRank = map[string]int{
+	"RED":    0,
+	"YELLOW": 1,
+	"GREEN":  2,
+}
+
+var actionItemStatusRank = map[string]int{
+	"PENDING":     0,
+	"IN_PROGRESS": 1,
+	"DONE":        2,
+	"CLOSED":      3,
+}
+
+// --- Domain → Model conversion helpers ---
+
+func toModelClient(c *client.Client) *model.Client {
+	return &model.Client{
+		ID:          c.ID,
+		Name:        c.Name,
+		Email:       c.Email,
+		DateOfBirth: c.DateOfBirth,
+		LastMeeting: c.LastMeetingDate,
+	}
+}
+
+func toModelAlert(a *alert.Alert) *model.Alert {
+	return &model.Alert{
+		ID:           a.ID,
+		ConditionKey: a.ConditionKey,
+		Severity:     model.AlertSeverity(a.Severity),
+		Category:     a.Category,
+		Status:       model.AlertStatus(a.Status),
+		SnoozedUntil: a.SnoozedUntil,
+		Summary:      a.Summary,
+		DraftMessage: a.DraftMessage,
+		CreatedAt:    a.CreatedAt,
+		UpdatedAt:    a.UpdatedAt,
+	}
+}
+
+func toModelActionItem(ai *actionitem.ActionItem) *model.ActionItem {
+	return &model.ActionItem{
+		ID:             ai.ID,
+		Text:           ai.Text,
+		Status:         model.ActionItemStatus(ai.Status),
+		DueDate:        ai.DueDate,
+		CreatedAt:      ai.CreatedAt,
+		ResolvedAt:     ai.ResolvedAt,
+		ResolutionNote: ai.ResolutionNote,
+	}
+}
+
+func toModelTransfer(t *transfer.Transfer, now time.Time) *model.Transfer {
+	return &model.Transfer{
+		ID:                 t.ID,
+		SourceInstitution:  t.SourceInstitution,
+		AccountType:        model.AccountType(t.AccountType),
+		Amount:             t.Amount,
+		Status:             model.TransferStatus(t.Status),
+		InitiatedAt:        t.InitiatedAt,
+		DaysInCurrentStage: int32(t.DaysInCurrentStage(now)),
+		IsStuck:            t.IsStuck(now),
+	}
+}
+
+// --- ActionItem field resolvers ---
 
 // Client is the resolver for the client field.
 func (r *actionItemResolver) Client(ctx context.Context, obj *model.ActionItem) (*model.Client, error) {
-	panic(fmt.Errorf("not implemented: Client - client"))
+	if obj.Client == nil {
+		return nil, fmt.Errorf("action item %s has no client reference", obj.ID)
+	}
+	c, err := r.ClientRepo.GetClient(ctx, obj.Client.ID)
+	if err != nil {
+		return nil, fmt.Errorf("resolving action item client: %w", err)
+	}
+	return toModelClient(c), nil
 }
 
 // Alert is the resolver for the alert field.
 func (r *actionItemResolver) Alert(ctx context.Context, obj *model.ActionItem) (*model.Alert, error) {
-	panic(fmt.Errorf("not implemented: Alert - alert"))
+	if obj.Alert == nil {
+		return nil, nil
+	}
+	// obj.Alert is populated as a stub by the parent — we stored alertID in its ID field.
+	a, err := r.AlertRepo.GetAlert(ctx, obj.Alert.ID)
+	if err != nil {
+		return nil, fmt.Errorf("resolving action item alert: %w", err)
+	}
+	return toModelAlert(a), nil
 }
+
+// --- Alert field resolvers ---
 
 // Client is the resolver for the client field.
 func (r *alertResolver) Client(ctx context.Context, obj *model.Alert) (*model.Client, error) {
-	panic(fmt.Errorf("not implemented: Client - client"))
+	c, err := r.ClientRepo.GetClient(ctx, obj.Client.ID)
+	if err != nil {
+		return nil, fmt.Errorf("resolving alert client: %w", err)
+	}
+	return toModelClient(c), nil
 }
 
 // LinkedActionItems is the resolver for the linkedActionItems field.
 func (r *alertResolver) LinkedActionItems(ctx context.Context, obj *model.Alert) ([]*model.ActionItem, error) {
-	panic(fmt.Errorf("not implemented: LinkedActionItems - linkedActionItems"))
+	if len(obj.LinkedActionItems) == 0 {
+		return []*model.ActionItem{}, nil
+	}
+	var items []*model.ActionItem
+	for _, stub := range obj.LinkedActionItems {
+		ai, err := r.ActionItemService.GetActionItem(ctx, stub.ID)
+		if err != nil {
+			return nil, fmt.Errorf("resolving linked action item %s: %w", stub.ID, err)
+		}
+		items = append(items, toModelActionItem(ai))
+	}
+	return items, nil
 }
+
+// --- Client field resolvers ---
 
 // Household is the resolver for the household field.
 func (r *clientResolver) Household(ctx context.Context, obj *model.Client) (*model.Household, error) {
-	panic(fmt.Errorf("not implemented: Household - household"))
+	h, err := r.HouseholdRepo.GetHouseholdByClientID(ctx, obj.ID)
+	if err != nil {
+		return nil, fmt.Errorf("resolving household: %w", err)
+	}
+	if h == nil {
+		return nil, nil
+	}
+	return &model.Household{ID: h.ID, Name: h.Name}, nil
 }
 
 // Accounts is the resolver for the accounts field.
 func (r *clientResolver) Accounts(ctx context.Context, obj *model.Client) ([]*model.Account, error) {
-	panic(fmt.Errorf("not implemented: Accounts - accounts"))
+	accounts, err := r.AccountRepo.GetAccountsByClientID(ctx, obj.ID)
+	if err != nil {
+		return nil, fmt.Errorf("resolving accounts: %w", err)
+	}
+	var result []*model.Account
+	for _, a := range accounts {
+		if !a.IsExternal {
+			result = append(result, &model.Account{
+				ID:          a.ID,
+				AccountType: model.AccountType(a.AccountType),
+				Institution: a.Institution,
+				Balance:     a.Balance,
+				IsExternal:  a.IsExternal,
+			})
+		}
+	}
+	return result, nil
 }
 
 // ExternalAccounts is the resolver for the externalAccounts field.
 func (r *clientResolver) ExternalAccounts(ctx context.Context, obj *model.Client) ([]*model.Account, error) {
-	panic(fmt.Errorf("not implemented: ExternalAccounts - externalAccounts"))
+	accounts, err := r.AccountRepo.GetAccountsByClientID(ctx, obj.ID)
+	if err != nil {
+		return nil, fmt.Errorf("resolving external accounts: %w", err)
+	}
+	var result []*model.Account
+	for _, a := range accounts {
+		if a.IsExternal {
+			result = append(result, &model.Account{
+				ID:          a.ID,
+				AccountType: model.AccountType(a.AccountType),
+				Institution: a.Institution,
+				Balance:     a.Balance,
+				IsExternal:  a.IsExternal,
+			})
+		}
+	}
+	return result, nil
 }
 
 // Aum is the resolver for the aum field.
 func (r *clientResolver) Aum(ctx context.Context, obj *model.Client) (float64, error) {
-	panic(fmt.Errorf("not implemented: Aum - aum"))
+	accounts, err := r.AccountRepo.GetAccountsByClientID(ctx, obj.ID)
+	if err != nil {
+		return 0, fmt.Errorf("resolving AUM: %w", err)
+	}
+	var total float64
+	for _, a := range accounts {
+		total += a.Balance
+	}
+	return total, nil
 }
 
 // Health is the resolver for the health field.
 func (r *clientResolver) Health(ctx context.Context, obj *model.Client) (model.HealthStatus, error) {
-	panic(fmt.Errorf("not implemented: Health - health"))
+	h, err := r.AlertService.ComputeHealthStatus(ctx, obj.ID)
+	if err != nil {
+		return "", fmt.Errorf("resolving health: %w", err)
+	}
+	return model.HealthStatus(h), nil
 }
 
 // Alerts is the resolver for the alerts field.
 func (r *clientResolver) Alerts(ctx context.Context, obj *model.Client) ([]*model.Alert, error) {
-	panic(fmt.Errorf("not implemented: Alerts - alerts"))
+	alerts, err := r.AlertRepo.GetAlertsByClientID(ctx, obj.ID)
+	if err != nil {
+		return nil, fmt.Errorf("resolving client alerts: %w", err)
+	}
+	result := make([]*model.Alert, 0, len(alerts))
+	for i := range alerts {
+		ma := toModelAlert(&alerts[i])
+		ma.Client = &model.Client{ID: alerts[i].ClientID}
+		ma.LinkedActionItems = makeActionItemStubs(alerts[i].LinkedActionItemIDs)
+		result = append(result, ma)
+	}
+	sortAlerts(result)
+	return result, nil
 }
 
 // ActionItems is the resolver for the actionItems field.
 func (r *clientResolver) ActionItems(ctx context.Context, obj *model.Client) ([]*model.ActionItem, error) {
-	panic(fmt.Errorf("not implemented: ActionItems - actionItems"))
+	items, err := r.ActionItemService.GetActionItemsByClientID(ctx, obj.ID)
+	if err != nil {
+		return nil, fmt.Errorf("resolving client action items: %w", err)
+	}
+	result := make([]*model.ActionItem, 0, len(items))
+	for i := range items {
+		result = append(result, toModelActionItem(&items[i]))
+	}
+	return result, nil
 }
 
 // Goals is the resolver for the goals field.
 func (r *clientResolver) Goals(ctx context.Context, obj *model.Client) ([]*model.Goal, error) {
-	panic(fmt.Errorf("not implemented: Goals - goals"))
+	goals, err := r.GoalRepo.GetGoalsByClientID(ctx, obj.ID)
+	if err != nil {
+		return nil, fmt.Errorf("resolving goals: %w", err)
+	}
+	result := make([]*model.Goal, 0, len(goals))
+	for _, g := range goals {
+		result = append(result, &model.Goal{
+			ID:           g.ID,
+			Name:         g.Name,
+			TargetAmount: g.TargetAmount,
+			TargetDate:   g.TargetDate,
+			ProgressPct:  int32(g.ProgressPct),
+			Status:       model.GoalStatus(g.Status),
+		})
+	}
+	return result, nil
 }
 
 // Notes is the resolver for the notes field.
 func (r *clientResolver) Notes(ctx context.Context, obj *model.Client) ([]*model.AdvisorNote, error) {
-	panic(fmt.Errorf("not implemented: Notes - notes"))
+	// Hardcoded advisor ID for prototype
+	notes, err := r.NoteRepo.GetNotes(ctx, obj.ID, "a1")
+	if err != nil {
+		return nil, fmt.Errorf("resolving notes: %w", err)
+	}
+	result := make([]*model.AdvisorNote, 0, len(notes))
+	for _, n := range notes {
+		result = append(result, &model.AdvisorNote{
+			ID:   n.ID,
+			Date: n.Date,
+			Text: n.Text,
+		})
+	}
+	return result, nil
 }
+
+// --- Household field resolvers ---
 
 // Members is the resolver for the members field.
 func (r *householdResolver) Members(ctx context.Context, obj *model.Household) ([]*model.Client, error) {
-	panic(fmt.Errorf("not implemented: Members - members"))
+	clients, err := r.ClientRepo.GetClientsByHouseholdID(ctx, obj.ID)
+	if err != nil {
+		return nil, fmt.Errorf("resolving household members: %w", err)
+	}
+	result := make([]*model.Client, 0, len(clients))
+	for i := range clients {
+		result = append(result, toModelClient(&clients[i]))
+	}
+	return result, nil
 }
+
+// --- Mutation resolvers ---
 
 // SendAlert is the resolver for the sendAlert field.
 func (r *mutationResolver) SendAlert(ctx context.Context, alertID string, message *string) (*model.Alert, error) {
-	panic(fmt.Errorf("not implemented: SendAlert - sendAlert"))
+	a, err := r.AlertService.Send(ctx, alertID, message)
+	if err != nil {
+		return nil, err
+	}
+	ma := toModelAlert(a)
+	ma.Client = &model.Client{ID: a.ClientID}
+	ma.LinkedActionItems = makeActionItemStubs(a.LinkedActionItemIDs)
+	return ma, nil
 }
 
 // TrackAlert is the resolver for the trackAlert field.
 func (r *mutationResolver) TrackAlert(ctx context.Context, alertID string, actionItemText string) (*model.Alert, error) {
-	panic(fmt.Errorf("not implemented: TrackAlert - trackAlert"))
+	a, err := r.AlertService.Track(ctx, alertID, actionItemText)
+	if err != nil {
+		return nil, err
+	}
+	ma := toModelAlert(a)
+	ma.Client = &model.Client{ID: a.ClientID}
+	ma.LinkedActionItems = makeActionItemStubs(a.LinkedActionItemIDs)
+	return ma, nil
 }
 
 // SnoozeAlert is the resolver for the snoozeAlert field.
 func (r *mutationResolver) SnoozeAlert(ctx context.Context, alertID string, until *time.Time) (*model.Alert, error) {
-	panic(fmt.Errorf("not implemented: SnoozeAlert - snoozeAlert"))
+	a, err := r.AlertService.Snooze(ctx, alertID, until)
+	if err != nil {
+		return nil, err
+	}
+	ma := toModelAlert(a)
+	ma.Client = &model.Client{ID: a.ClientID}
+	ma.LinkedActionItems = makeActionItemStubs(a.LinkedActionItemIDs)
+	return ma, nil
 }
 
 // AcknowledgeAlert is the resolver for the acknowledgeAlert field.
 func (r *mutationResolver) AcknowledgeAlert(ctx context.Context, alertID string) (*model.Alert, error) {
-	panic(fmt.Errorf("not implemented: AcknowledgeAlert - acknowledgeAlert"))
+	a, err := r.AlertService.Acknowledge(ctx, alertID)
+	if err != nil {
+		return nil, err
+	}
+	ma := toModelAlert(a)
+	ma.Client = &model.Client{ID: a.ClientID}
+	ma.LinkedActionItems = makeActionItemStubs(a.LinkedActionItemIDs)
+	return ma, nil
 }
 
 // CreateActionItem is the resolver for the createActionItem field.
 func (r *mutationResolver) CreateActionItem(ctx context.Context, input model.CreateActionItemInput) (*model.ActionItem, error) {
-	panic(fmt.Errorf("not implemented: CreateActionItem - createActionItem"))
+	ai, err := r.ActionItemService.CreateActionItem(ctx, input.ClientID, input.AlertID, input.Text, input.DueDate)
+	if err != nil {
+		return nil, err
+	}
+	mai := toModelActionItem(ai)
+	mai.Client = &model.Client{ID: ai.ClientID}
+	if ai.AlertID != nil {
+		mai.Alert = &model.Alert{ID: *ai.AlertID}
+	}
+	return mai, nil
 }
 
 // UpdateActionItem is the resolver for the updateActionItem field.
 func (r *mutationResolver) UpdateActionItem(ctx context.Context, id string, input model.UpdateActionItemInput) (*model.ActionItem, error) {
-	panic(fmt.Errorf("not implemented: UpdateActionItem - updateActionItem"))
+	var status *actionitem.ActionItemStatus
+	if input.Status != nil {
+		s := actionitem.ActionItemStatus(*input.Status)
+		status = &s
+	}
+	ai, err := r.ActionItemService.UpdateActionItem(ctx, id, input.Text, status, input.DueDate)
+	if err != nil {
+		return nil, err
+	}
+	mai := toModelActionItem(ai)
+	mai.Client = &model.Client{ID: ai.ClientID}
+	if ai.AlertID != nil {
+		mai.Alert = &model.Alert{ID: *ai.AlertID}
+	}
+	return mai, nil
 }
 
 // AddNote is the resolver for the addNote field.
 func (r *mutationResolver) AddNote(ctx context.Context, clientID string, text string) (*model.AdvisorNote, error) {
-	panic(fmt.Errorf("not implemented: AddNote - addNote"))
+	note, err := r.NoteRepo.AddNote(ctx, clientID, "a1", text)
+	if err != nil {
+		return nil, fmt.Errorf("adding note: %w", err)
+	}
+	return &model.AdvisorNote{
+		ID:   note.ID,
+		Date: note.Date,
+		Text: note.Text,
+	}, nil
 }
 
 // RunMorningSweep is the resolver for the runMorningSweep field.
 func (r *mutationResolver) RunMorningSweep(ctx context.Context, advisorID string) (*model.SweepResult, error) {
-	panic(fmt.Errorf("not implemented: RunMorningSweep - runMorningSweep"))
+	start := time.Now().In(est)
+
+	// Subscribe to alert events for counting outcomes.
+	createdCh := r.EventBus.Subscribe(alert.EventAlertCreated)
+	updatedCh := r.EventBus.Subscribe(alert.EventAlertUpdated)
+	closedCh := r.EventBus.Subscribe(alert.EventAlertClosed)
+
+	// Get advisor's clients.
+	clients, err := r.ClientRepo.GetClients(ctx, advisorID)
+	if err != nil {
+		return nil, fmt.Errorf("getting clients for sweep: %w", err)
+	}
+
+	taxYear := start.Year()
+
+	// Run contribution analysis for each client.
+	for _, c := range clients {
+		if err := r.ContribEngine.AnalyzeClient(ctx, c.ID, taxYear); err != nil {
+			log.Printf("sweep: contribution analysis failed for client %s: %v", c.ID, err)
+		}
+	}
+
+	// Check stuck transfers.
+	if _, err := r.TransferMonitor.CheckStuckTransfers(ctx); err != nil {
+		log.Printf("sweep: stuck transfer check failed: %v", err)
+	}
+
+	// Run temporal sweep.
+	if _, err := r.TemporalScanner.RunSweep(ctx, advisorID, start); err != nil {
+		log.Printf("sweep: temporal scan failed: %v", err)
+	}
+
+	// Drain event channels with a short timeout to count results.
+	var alertsGenerated, alertsUpdated int32
+	drainTimeout := time.After(200 * time.Millisecond)
+drain:
+	for {
+		select {
+		case <-createdCh:
+			alertsGenerated++
+		case <-updatedCh:
+			alertsUpdated++
+		case <-closedCh:
+			// counted but not reported separately
+		case <-drainTimeout:
+			break drain
+		}
+	}
+
+	duration := time.Since(start).String()
+	return &model.SweepResult{
+		AlertsGenerated: alertsGenerated,
+		AlertsUpdated:   alertsUpdated,
+		AlertsSkipped:   0, // simplified for prototype
+		Duration:        duration,
+	}, nil
 }
+
+// --- Query resolvers ---
 
 // Advisor is the resolver for the advisor field.
 func (r *queryResolver) Advisor(ctx context.Context, id string) (*model.Advisor, error) {
-	panic(fmt.Errorf("not implemented: Advisor - advisor"))
+	a, err := r.AdvisorRepo.GetAdvisor(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("getting advisor: %w", err)
+	}
+	return &model.Advisor{
+		ID:    a.ID,
+		Name:  a.Name,
+		Email: a.Email,
+		Role:  a.Role,
+	}, nil
 }
 
 // Clients is the resolver for the clients field.
 func (r *queryResolver) Clients(ctx context.Context, advisorID string) ([]*model.Client, error) {
-	panic(fmt.Errorf("not implemented: Clients - clients"))
+	clients, err := r.ClientRepo.GetClients(ctx, advisorID)
+	if err != nil {
+		return nil, fmt.Errorf("getting clients: %w", err)
+	}
+
+	// Compute health for sorting.
+	type clientWithHealth struct {
+		mc     *model.Client
+		health alert.HealthStatus
+	}
+	cwh := make([]clientWithHealth, 0, len(clients))
+	for i := range clients {
+		mc := toModelClient(&clients[i])
+		h, err := r.AlertService.ComputeHealthStatus(ctx, clients[i].ID)
+		if err != nil {
+			return nil, fmt.Errorf("computing health for client %s: %w", clients[i].ID, err)
+		}
+		cwh = append(cwh, clientWithHealth{mc: mc, health: h})
+	}
+
+	sort.SliceStable(cwh, func(i, j int) bool {
+		ri := healthRank[string(cwh[i].health)]
+		rj := healthRank[string(cwh[j].health)]
+		if ri != rj {
+			return ri < rj
+		}
+		return cwh[i].mc.Name < cwh[j].mc.Name
+	})
+
+	result := make([]*model.Client, len(cwh))
+	for i, c := range cwh {
+		result[i] = c.mc
+	}
+	return result, nil
 }
 
 // Client is the resolver for the client field.
 func (r *queryResolver) Client(ctx context.Context, id string) (*model.Client, error) {
-	panic(fmt.Errorf("not implemented: Client - client"))
+	c, err := r.ClientRepo.GetClient(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("getting client: %w", err)
+	}
+	return toModelClient(c), nil
 }
 
 // Alerts is the resolver for the alerts field.
 func (r *queryResolver) Alerts(ctx context.Context, advisorID string, filter *model.AlertFilter) ([]*model.Alert, error) {
-	panic(fmt.Errorf("not implemented: Alerts - alerts"))
+	alerts, err := r.AlertRepo.GetAlertsByAdvisorID(ctx, advisorID)
+	if err != nil {
+		return nil, fmt.Errorf("getting alerts: %w", err)
+	}
+
+	result := make([]*model.Alert, 0, len(alerts))
+	for i := range alerts {
+		a := &alerts[i]
+
+		// Apply in-memory filter.
+		if filter != nil {
+			if filter.Severity != nil && string(a.Severity) != string(*filter.Severity) {
+				continue
+			}
+			if filter.Status != nil && string(a.Status) != string(*filter.Status) {
+				continue
+			}
+			if filter.ClientID != nil && a.ClientID != *filter.ClientID {
+				continue
+			}
+		}
+
+		ma := toModelAlert(a)
+		ma.Client = &model.Client{ID: a.ClientID}
+		ma.LinkedActionItems = makeActionItemStubs(a.LinkedActionItemIDs)
+		result = append(result, ma)
+	}
+
+	sortAlerts(result)
+	return result, nil
 }
 
 // Alert is the resolver for the alert field.
 func (r *queryResolver) Alert(ctx context.Context, id string) (*model.Alert, error) {
-	panic(fmt.Errorf("not implemented: Alert - alert"))
+	a, err := r.AlertRepo.GetAlert(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("getting alert: %w", err)
+	}
+	ma := toModelAlert(a)
+	ma.Client = &model.Client{ID: a.ClientID}
+	ma.LinkedActionItems = makeActionItemStubs(a.LinkedActionItemIDs)
+	return ma, nil
 }
 
 // ContributionSummary is the resolver for the contributionSummary field.
 func (r *queryResolver) ContributionSummary(ctx context.Context, clientID string, taxYear int32) (*model.ContributionSummary, error) {
-	panic(fmt.Errorf("not implemented: ContributionSummary - contributionSummary"))
+	summary, err := r.ContribEngine.GetContributionSummary(ctx, clientID, int(taxYear))
+	if err != nil {
+		return nil, fmt.Errorf("getting contribution summary: %w", err)
+	}
+
+	accounts := make([]*model.AccountContribution, 0, len(summary.Accounts))
+	for _, ac := range summary.Accounts {
+		mac := &model.AccountContribution{
+			AccountType:       model.AccountType(ac.AccountType),
+			AnnualLimit:       ac.AnnualLimit,
+			Contributed:       ac.Contributed,
+			Remaining:         ac.Remaining,
+			IsOverContributed: ac.IsOverContributed,
+		}
+
+		// Enrich with lifetime cap from AccountType.
+		lifetimeCap := account.AccountType(ac.AccountType).LifetimeCap()
+		mac.LifetimeCap = lifetimeCap
+
+		if ac.OverAmount > 0 {
+			mac.OverAmount = &ac.OverAmount
+		}
+		if ac.PenaltyPerMonth > 0 {
+			mac.PenaltyPerMonth = &ac.PenaltyPerMonth
+		}
+		if ac.Deadline != nil {
+			mac.Deadline = ac.Deadline
+		}
+		if ac.DaysUntilDeadline != nil {
+			d := int32(*ac.DaysUntilDeadline)
+			mac.DaysUntilDeadline = &d
+		}
+
+		accounts = append(accounts, mac)
+	}
+
+	return &model.ContributionSummary{
+		ClientID: summary.ClientID,
+		TaxYear:  int32(summary.TaxYear),
+		Accounts: accounts,
+	}, nil
 }
 
 // Transfers is the resolver for the transfers field.
 func (r *queryResolver) Transfers(ctx context.Context, advisorID string) ([]*model.Transfer, error) {
-	panic(fmt.Errorf("not implemented: Transfers - transfers"))
+	clients, err := r.ClientRepo.GetClients(ctx, advisorID)
+	if err != nil {
+		return nil, fmt.Errorf("getting clients for transfers: %w", err)
+	}
+
+	now := time.Now().In(est)
+	var result []*model.Transfer
+	for _, c := range clients {
+		transfers, err := r.TransferRepo.GetTransfersByClientID(ctx, c.ID)
+		if err != nil {
+			return nil, fmt.Errorf("getting transfers for client %s: %w", c.ID, err)
+		}
+		for i := range transfers {
+			mt := toModelTransfer(&transfers[i], now)
+			mt.Client = &model.Client{ID: transfers[i].ClientID}
+			result = append(result, mt)
+		}
+	}
+	return result, nil
 }
 
 // ActionItems is the resolver for the actionItems field.
 func (r *queryResolver) ActionItems(ctx context.Context, clientID *string) ([]*model.ActionItem, error) {
-	panic(fmt.Errorf("not implemented: ActionItems - actionItems"))
+	var items []actionitem.ActionItem
+	if clientID != nil {
+		var err error
+		items, err = r.ActionItemService.GetActionItemsByClientID(ctx, *clientID)
+		if err != nil {
+			return nil, fmt.Errorf("getting action items: %w", err)
+		}
+	} else {
+		// Iterate all advisor clients (hardcoded to a1 for prototype).
+		clients, err := r.ClientRepo.GetClients(ctx, "a1")
+		if err != nil {
+			return nil, fmt.Errorf("getting clients for action items: %w", err)
+		}
+		for _, c := range clients {
+			clientItems, err := r.ActionItemService.GetActionItemsByClientID(ctx, c.ID)
+			if err != nil {
+				return nil, fmt.Errorf("getting action items for client %s: %w", c.ID, err)
+			}
+			items = append(items, clientItems...)
+		}
+	}
+
+	result := make([]*model.ActionItem, 0, len(items))
+	for i := range items {
+		mai := toModelActionItem(&items[i])
+		mai.Client = &model.Client{ID: items[i].ClientID}
+		if items[i].AlertID != nil {
+			mai.Alert = &model.Alert{ID: *items[i].AlertID}
+		}
+		result = append(result, mai)
+	}
+
+	sortActionItems(result)
+	return result, nil
 }
+
+// --- Subscription resolvers ---
 
 // AlertFeed is the resolver for the alertFeed field.
 func (r *subscriptionResolver) AlertFeed(ctx context.Context, advisorID string) (<-chan *model.AlertEvent, error) {
-	panic(fmt.Errorf("not implemented: AlertFeed - alertFeed"))
+	createdCh := r.EventBus.Subscribe(alert.EventAlertCreated)
+	updatedCh := r.EventBus.Subscribe(alert.EventAlertUpdated)
+	closedCh := r.EventBus.Subscribe(alert.EventAlertClosed)
+
+	ch := make(chan *model.AlertEvent, 10)
+
+	go func() {
+		defer close(ch)
+		for {
+			var eventType model.AlertEventType
+			var alertID string
+
+			select {
+			case <-ctx.Done():
+				return
+			case env := <-createdCh:
+				eventType = model.AlertEventTypeCreated
+				alertID = extractAlertID(env.Payload)
+			case env := <-updatedCh:
+				eventType = model.AlertEventTypeUpdated
+				alertID = extractAlertID(env.Payload)
+			case env := <-closedCh:
+				eventType = model.AlertEventTypeClosed
+				alertID = extractAlertID(env.Payload)
+			}
+
+			if alertID == "" {
+				continue
+			}
+
+			a, err := r.AlertRepo.GetAlert(ctx, alertID)
+			if err != nil {
+				continue
+			}
+
+			// Verify alert's client belongs to this advisor.
+			c, err := r.ClientRepo.GetClient(ctx, a.ClientID)
+			if err != nil || c.AdvisorID != advisorID {
+				continue
+			}
+
+			ma := toModelAlert(a)
+			ma.Client = &model.Client{ID: a.ClientID}
+			ma.LinkedActionItems = makeActionItemStubs(a.LinkedActionItemIDs)
+
+			select {
+			case ch <- &model.AlertEvent{Type: eventType, Alert: ma}:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
+	return ch, nil
 }
+
+// --- Transfer field resolvers ---
 
 // Client is the resolver for the client field.
 func (r *transferResolver) Client(ctx context.Context, obj *model.Transfer) (*model.Client, error) {
-	panic(fmt.Errorf("not implemented: Client - client"))
+	c, err := r.ClientRepo.GetClient(ctx, obj.Client.ID)
+	if err != nil {
+		return nil, fmt.Errorf("resolving transfer client: %w", err)
+	}
+	return toModelClient(c), nil
 }
+
+// --- Resolver factory methods ---
 
 // ActionItem returns ActionItemResolver implementation.
 func (r *Resolver) ActionItem() ActionItemResolver { return &actionItemResolver{r} }
@@ -205,3 +786,59 @@ type mutationResolver struct{ *Resolver }
 type queryResolver struct{ *Resolver }
 type subscriptionResolver struct{ *Resolver }
 type transferResolver struct{ *Resolver }
+
+// --- Shared helpers ---
+
+func sortAlerts(alerts []*model.Alert) {
+	sort.SliceStable(alerts, func(i, j int) bool {
+		ri := severityRank[string(alerts[i].Severity)]
+		rj := severityRank[string(alerts[j].Severity)]
+		if ri != rj {
+			return ri < rj
+		}
+		return alerts[i].CreatedAt.After(alerts[j].CreatedAt)
+	})
+}
+
+func sortActionItems(items []*model.ActionItem) {
+	sort.SliceStable(items, func(i, j int) bool {
+		ri := actionItemStatusRank[string(items[i].Status)]
+		rj := actionItemStatusRank[string(items[j].Status)]
+		if ri != rj {
+			return ri < rj
+		}
+		// Nulls last for due date
+		if items[i].DueDate == nil && items[j].DueDate == nil {
+			return false
+		}
+		if items[i].DueDate == nil {
+			return false
+		}
+		if items[j].DueDate == nil {
+			return true
+		}
+		return items[i].DueDate.Before(*items[j].DueDate)
+	})
+}
+
+func makeActionItemStubs(ids []string) []*model.ActionItem {
+	if len(ids) == 0 {
+		return []*model.ActionItem{}
+	}
+	stubs := make([]*model.ActionItem, len(ids))
+	for i, id := range ids {
+		stubs[i] = &model.ActionItem{ID: id}
+	}
+	return stubs
+}
+
+func extractAlertID(payload json.RawMessage) string {
+	var data map[string]any
+	if err := json.Unmarshal(payload, &data); err != nil {
+		return ""
+	}
+	if id, ok := data["alert_id"].(string); ok {
+		return id
+	}
+	return ""
+}
