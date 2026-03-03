@@ -1,0 +1,5 @@
+# Compiled binaries
+backend/backend
+
+# OS files
+.DS_Store

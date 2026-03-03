@@ -11,6 +11,9 @@
 #                         alert → [event-bus, client, action-item-service]
 #   Level 3:              seed-data → [client, account, contribution-engine, transfer-monitor, event-bus]
 #   Level 4:              graphql-api → [all above]
+#   Level 5:              frontend → [graphql-api]
+#
+# type: "go" (default) or "node" — controls test/build commands
 
 contexts:
   # --- Level 0: no dependencies ---
@@ -18,6 +21,7 @@ contexts:
   - name: client
     spec: specs/01-client.md
     package: client
+    type: go
     risk: LOW
     depends_on: []
     description: "Client, Household, Advisor, AdvisorNote, Goal entities and repositories"
@@ -25,6 +29,7 @@ contexts:
   - name: account
     spec: specs/02-account.md
     package: account
+    type: go
     risk: LOW
     depends_on: []
     description: "Account, AccountType, RESPBeneficiary entities and repositories"
@@ -32,6 +37,7 @@ contexts:
   - name: event-bus
     spec: specs/03-event-bus.md
     package: eventbus
+    type: go
     risk: MEDIUM
     depends_on: []
     description: "EventEnvelope, EventSource, EntityType, pub/sub infrastructure"
@@ -39,6 +45,7 @@ contexts:
   - name: action-item-service
     spec: specs/08-action-item-service.md
     package: actionitem
+    type: go
     risk: LOW
     depends_on: []
     description: "ActionItem CRUD and status transitions"
@@ -48,6 +55,7 @@ contexts:
   - name: contribution-engine
     spec: specs/04-contribution-engine.md
     package: contribution
+    type: go
     risk: HIGH
     depends_on: [event-bus, account]
     description: "Contribution rules, room calc, over-contribution detection, CESG gap detection"
@@ -55,6 +63,7 @@ contexts:
   - name: transfer-monitor
     spec: specs/05-transfer-monitor.md
     package: transfer
+    type: go
     risk: HIGH
     depends_on: [event-bus]
     description: "Transfer status tracking, stage thresholds, stuck detection"
@@ -64,6 +73,7 @@ contexts:
   - name: temporal-scanner
     spec: specs/06-temporal-scanner.md
     package: temporal
+    type: go
     risk: HIGH
     depends_on: [event-bus, client, account, contribution-engine]
     description: "Rule-driven temporal checks (AGE_APPROACHING, DEADLINE_WITH_ROOM, DAYS_SINCE, BALANCE_IDLE)"
@@ -71,6 +81,7 @@ contexts:
   - name: alert
     spec: specs/07-alert.md
     package: alert
+    type: go
     risk: HIGH
     depends_on: [event-bus, client, action-item-service]
     description: "Alert mapping, lifecycle state machine, dedup, cascade close, LLM enhancement"
@@ -80,6 +91,7 @@ contexts:
   - name: seed-data
     spec: specs/10-seed-data.md
     package: seed
+    type: go
     risk: LOW
     depends_on: [client, account, contribution-engine, transfer-monitor, event-bus]
     description: "Seed data loader, pre-computed events for demo scenarios"
@@ -89,6 +101,17 @@ contexts:
   - name: graphql-api
     spec: specs/09-graphql-api.md
     package: graph
+    type: go
     risk: MEDIUM
     depends_on: [client, account, event-bus, contribution-engine, transfer-monitor, temporal-scanner, alert, action-item-service]
     description: "GraphQL resolvers, SSE subscriptions, transport layer"
+
+  # --- Level 5: depends on graphql-api ---
+
+  - name: frontend
+    spec: specs/11-frontend.md
+    package: frontend
+    type: node
+    risk: LOW
+    depends_on: [graphql-api]
+    description: "React dashboard with alert feed, transfer tracking, client book"

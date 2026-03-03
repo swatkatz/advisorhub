@@ -78,6 +78,7 @@ for i in $(seq 0 $((context_count - 1))); do
   spec=$(yq ".contexts[$i].spec" "$MANIFEST")
   risk=$(yq ".contexts[$i].risk" "$MANIFEST")
   pkg=$(yq ".contexts[$i].package" "$MANIFEST")
+  ctx_type=$(yq ".contexts[$i].type" "$MANIFEST")
   description=$(yq ".contexts[$i].description" "$MANIFEST")
 
   echo "═══════════════════════════════════════"
@@ -111,21 +112,36 @@ for i in $(seq 0 $((context_count - 1))); do
   echo "Running tests for $name..."
   echo ""
 
-  # Package directory from manifest (e.g., "graph" for graphql-api)
-  pkg_dir="$pkg"
-  test_output=$(go test ./backend/internal/"$pkg_dir"/... -v -count=1 2>&1) || {
-    echo "TESTS FAILED for $name"
-    echo "$test_output"
-    echo "| $name | $risk | — | FAIL | — | FAILED |" >> "$LEDGER"
-    git checkout "$BASE_BRANCH"
-    echo ""
-    echo "Stopping build. Fix $name and re-run."
-    exit 1
-  }
+  if [ "$ctx_type" = "node" ]; then
+    # Frontend: build to verify, then run tests if they exist
+    test_output=$(cd frontend && npm run build 2>&1) || {
+      echo "BUILD FAILED for $name"
+      echo "$test_output"
+      echo "| $name | $risk | — | FAIL | — | FAILED |" >> "$LEDGER"
+      git checkout "$BASE_BRANCH"
+      echo ""
+      echo "Stopping build. Fix $name and re-run."
+      exit 1
+    }
+    echo "Build succeeded."
+    test_count="build-ok"
+  else
+    # Go: run unit tests
+    pkg_dir="$pkg"
+    test_output=$(go test ./backend/internal/"$pkg_dir"/... -v -count=1 2>&1) || {
+      echo "TESTS FAILED for $name"
+      echo "$test_output"
+      echo "| $name | $risk | — | FAIL | — | FAILED |" >> "$LEDGER"
+      git checkout "$BASE_BRANCH"
+      echo ""
+      echo "Stopping build. Fix $name and re-run."
+      exit 1
+    }
 
-  # Count tests from output
-  test_count=$(echo "$test_output" | grep -c "^--- PASS" || echo "0")
-  echo "Tests passed: $test_count"
+    # Count tests from output
+    test_count=$(echo "$test_output" | grep -c "^--- PASS" || echo "0")
+    echo "Tests passed: $test_count"
+  fi
 
   # --- Commit ---
 

@@ -24,12 +24,20 @@ Check CLAUDE.md "Specs written" and "Built and merged" sections to know what's a
 
 ## File placement
 
+### Go contexts (backend)
+
 - Package code: `backend/internal/{context}/` (e.g., `backend/internal/client/`)
 - Package name: lowercase single word matching directory (e.g., `client`, `eventbus`, `contribution`)
 - Tests: `*_test.go` in the same package
 - Migrations: `backend/migrations/` numbered sequentially (check existing migrations to pick the next number)
 
-## TDD workflow
+### Node contexts (frontend)
+
+- All code in `frontend/src/`
+- Components in `frontend/src/components/`
+- Follow existing Vite + React + TypeScript project structure
+
+## TDD workflow (Go contexts)
 
 For each behavior or test anchor in the spec:
 
@@ -40,7 +48,13 @@ For each behavior or test anchor in the spec:
 
 Do NOT write all tests at once then implement. Do NOT write implementation without a test.
 
-## Testing approach
+## Frontend workflow (Node contexts)
+
+1. Read the spec and the visual reference at `docs/mocks/advisor-dashboard.jsx`
+2. Implement components following the spec's section order
+3. Verify the build passes: `cd frontend && npm run build`
+
+## Testing approach (Go contexts)
 
 - **Unit tests only.** No real database, no Docker, no testcontainers.
 - **Mock dependencies** using interfaces. If your context depends on another (e.g., temporal scanner depends on contribution engine), define the interface your context needs and create a mock implementation in the test file.
@@ -48,6 +62,8 @@ Do NOT write all tests at once then implement. Do NOT write implementation witho
 - Test business logic thoroughly. Don't test trivial getters/setters.
 
 ## Implementation conventions
+
+### Go contexts
 
 - **Go 1.25+**
 - `context.Context` on all public functions
@@ -57,6 +73,15 @@ Do NOT write all tests at once then implement. Do NOT write implementation witho
 - Repositories return data ordered by `id` by default. Sorting for display is the GraphQL resolver's job.
 - Use `sqlx` for database queries (not raw `database/sql`). All timestamps UTC.
 - Migrations: numbered SQL files (`001_create_clients.sql`, `002_create_accounts.sql`, etc.)
+
+### Node contexts
+
+- React 18+ with TypeScript
+- Vite for build tooling
+- Tailwind for styling is fine, or inline styles
+- GraphQL client: urql or Apollo — pick one and stick with it
+- SSE subscription via `graphql-sse` client library
+- `VITE_API_URL` env var for backend URL
 
 ## Codegen
 
